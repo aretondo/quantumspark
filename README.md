@@ -32,7 +32,7 @@ Para rodar o **Quantum Spark**, você precisará ter o Python 3.10 ou superior i
 3.  **Execute o Jogo:**
     Com as bibliotecas instaladas, inicie o jogo com o seguinte comando:
     ```bash
-    python main.py
+    python game_main.py
     ```
 
 ## Mecânicas de Interação
