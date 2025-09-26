@@ -1,16 +1,16 @@
-# Quantum Collector: Uma Jornada pelo Caos Quântico
+# Quantum Spark: Uma Jornada pelo Caos Quântico
 
-![Gameplay do Quantum Collector](https://raw.githubusercontent.com/aretondo/quantumspark/main/docs/gameplay.gif)
+![Gameplay do Quantum Spark](https://raw.githubusercontent.com/aretondo/quantumspark/main/docs/screenshot.jpg)
 
 ## Resumo do Projeto
 
-O **Quantum Collector** é um jogo de simulação e estratégia que explora conceitos da mecânica quântica e do caos de forma interativa. Nele, você manipula flutuações quânticas que emergem do vácuo, guia-as para colisão e testemunha a criação e aniquilação de matéria. Seu objetivo é estabilizar as partículas recém-formadas para construir estruturas atômicas mais complexas, como prótons, nêutrons e átomos de deutério, tudo isso enquanto gerencia o nível de caos do seu sistema.
+O **Quantum Spark** é um jogo de simulação e estratégia que explora conceitos da mecânica quântica e do caos de forma interativa. Nele, você manipula flutuações quânticas que emergem do vácuo, guia-as para colisão e testemunha a criação e aniquilação de matéria. Seu objetivo é estabilizar as partículas recém-formadas para construir estruturas atômicas mais complexas, como prótons, nêutrons e átomos de deutério, tudo isso enquanto gerencia o nível de caos do seu sistema.
 
 A simulação é baseada em princípios como a **teoria da bifurcação** para gerar as flutuações e interações que imitam as forças fundamentais da natureza, como a força nuclear forte e a eletromagnética. É uma experiência visualmente rica e desafiadora que une ciência e diversão.
 
 ## Instalação e Execução
 
-Para rodar o **Quantum Collector**, você precisará ter o Python 3.10 ou superior instalado em seu sistema, juntamente com as bibliotecas necessárias.
+Para rodar o **Quantum Spark**, você precisará ter o Python 3.10 ou superior instalado em seu sistema, juntamente com as bibliotecas necessárias.
 
 ### Pré-requisitos
 * **Python 3.10+**
