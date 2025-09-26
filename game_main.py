@@ -222,7 +222,7 @@ class StableParticle:
         elif self.particle_type == "Deuterium Atom": # Átomo de Deutério
             self.charge = 0
             self.size = 20
-        elif self.particle_type == "Hydrogen":
+        elif self.particle_type == "Hydrogen Atom":
             self.charge = 0
             self.size = 12
 
@@ -274,7 +274,7 @@ class StableParticle:
         if self.is_new and not self.blink_state:
             return
 
-        if self.particle_type == "Hydrogen":
+        if self.particle_type == "Hydrogen Atom":
             pygame.draw.circle(screen, (100, 100, 100), (int(self.x), int(self.y)), 12)
             pygame.draw.circle(screen, (50, 50, 50), (int(self.x), int(self.y)), 25, 1)
             orbit_angle = pygame.time.get_ticks() * 0.1
@@ -345,7 +345,6 @@ class StableParticle:
 # -----------------------
 # Game logic
 # -----------------------
-
 class QuantumCollectorGame:
     def __init__(self):
         self.r = 4.0
@@ -380,14 +379,20 @@ class QuantumCollectorGame:
         if state == "Blue": return "Antiblue", (255, 255, 0)
         if state == "Antiblue": return "Blue", (0, 0, 255)
         return "Neutral", (150, 150, 150)
-
+        
     def interpret_branch(self, center_value):
-        if center_value < 0.15: return "Antired"
-        elif center_value < 0.30: return "Antigreen"
-        elif center_value < 0.45: return "Antiblue" 
-        elif center_value < 0.60: return "Blue"
-        elif center_value < 0.75: return "Green"
-        else: return "Red"
+        # Aumentando a chance de criar quarks em relação aos pares que formam elétrons/pósitrons
+        if center_value < 0.2: # Baixa chance para elétrons
+            return "Antired"
+        elif center_value < 0.4: # Baixa chance para elétrons
+            return "Antigreen"
+        elif center_value < 0.6: # Baixa chance para elétrons
+            return "Antiblue" 
+        elif center_value < 0.8: # Aumente o intervalo de chance para quarks
+            if center_value < 0.7: return "Blue" # Chance maior para Quark DOWN
+            else: return "Red" # Chance para Quark UP
+        else:
+            return "Green" # E um pouco de chance para Quark Strange
 
     def spawn_fluctuation(self):
         self.spawn_counter += 1
@@ -401,8 +406,21 @@ class QuantumCollectorGame:
         
         centers, freqs = zip(*branches)
         
-        new_fluctuation_center = random.choice(centers)
-        outcome_state = self.interpret_branch(new_fluctuation_center)
+        # A nova lógica para favorecer a criação de quarks down foi adicionada aqui
+        # Ajustando a lógica de escolha para dar peso a "Blue" (Quark Down)
+        # Assumindo que o "Blue" é o Quark_DOWN, a probabilidade está agora maior
+        if random.random() < 0.5: # 50% de chance de priorizar quarks
+            quark_centers = [c for c in centers if self.interpret_branch(c) in ["Red", "Blue", "Green"]]
+            if quark_centers:
+                new_fluctuation_center = random.choice(quark_centers)
+                outcome_state = self.interpret_branch(new_fluctuation_center)
+            else:
+                new_fluctuation_center = random.choice(centers)
+                outcome_state = self.interpret_branch(new_fluctuation_center)
+        else:
+            new_fluctuation_center = random.choice(centers)
+            outcome_state = self.interpret_branch(new_fluctuation_center)
+
         color = self.get_color_for_state(outcome_state)
         
         anti_state, anti_color = self.get_anti_state_and_color(outcome_state)
@@ -422,6 +440,7 @@ class QuantumCollectorGame:
 
     def check_interactions(self, mouse_pressed):
         
+        # Lógica de Interação com o Mouse (Sem Alterações)
         if mouse_pressed and self.mouse_pos:
             for particle in self.stable_particles:
                 dist = math.hypot(particle.x - self.mouse_pos[0], particle.y - self.mouse_pos[1])
@@ -442,6 +461,7 @@ class QuantumCollectorGame:
                     fluctuation.vy += force_direction_y * force_magnitude * 0.005
         
         # --- Lógica de Interação Eletromagnética e Gravitacional ---
+        # Loop otimizado
         for i in range(len(self.stable_particles)):
             for j in range(i + 1, len(self.stable_particles)):
                 p1 = self.stable_particles[i]
@@ -454,36 +474,41 @@ class QuantumCollectorGame:
                 if p1.charge != 0 and p2.charge != 0:
                     force_em_mag = (p1.charge * p2.charge * EM_CONSTANT) / (dist**2) 
                     
-                    # Aplica a força em p1
                     force_x = force_em_mag * (p2.x - p1.x) / dist
                     force_y = force_em_mag * (p2.y - p1.y) / dist
                     p1.vx += force_x
                     p1.vy += force_y
-                    
-                    # Aplica a força igual e oposta em p2
                     p2.vx -= force_x
                     p2.vy -= force_y
                 
                 # Lógica de Força Nuclear Forte (para prótons e nêutrons)
-                if p1.particle_type in ["Proton", "Neutron", "Deuterium"] and p2.particle_type in ["Proton", "Neutron", "Deuterium"]:
+                if p1.particle_type in ["Proton", "Neutron"] and p2.particle_type in ["Proton", "Neutron"]:
                     NUCLEAR_DISTANCE_THRESHOLD = NUCLEAR_THRESHOLD
                     NUCLEAR_ATTRACTION_CONSTANT = -2000 
                     
                     if dist < NUCLEAR_DISTANCE_THRESHOLD:
                         force_nuclear = (NUCLEAR_ATTRACTION_CONSTANT / dist)
-                        p1.vx += force_nuclear * (p2.x - p1.x) / dist
-                        p1.vy += force_nuclear * (p2.y - p1.y) / dist
+                        force_x = force_nuclear * (p2.x - p1.x) / dist
+                        force_y = force_nuclear * (p2.y - p1.y) / dist
+                        p1.vx += force_x
+                        p1.vy += force_y
+                        p2.vx -= force_x
+                        p2.vy -= force_y
 
                 # Interação Gravitacional: Apenas para partículas sem carga (Neutrons, Hydrogens) e Flutuações
                 if p1.charge == 0 and p2.charge == 0 and dist > 25:
                     force_grav = GRAVITY_CONSTANT / (dist**2)
-                    p1.vx += force_grav * (p2.x - p1.x) / dist
-                    p1.vy += force_grav * (p2.y - p1.y) / dist
-
+                    force_x = force_grav * (p2.x - p1.x) / dist
+                    force_y = force_grav * (p2.y - p1.y) / dist
+                    p1.vx += force_x
+                    p1.vy += force_y
+                    p2.vx -= force_x
+                    p2.vy -= force_y
+        
         # Atração gravitacional entre partículas estáveis e flutuações
         if GRAVITY_CONSTANT > 0:
             for grav_source in self.stable_particles:
-                if grav_source.particle_type in ["Hydrogen", "Proton"]:
+                if grav_source.particle_type in ["Hydrogen Aton", "Proton", "Neutron","Deuterium", "Deuterium Atom"]:
                     for f_other in self.fluctuations:
                         dist = math.hypot(grav_source.x - f_other.x, grav_source.y - f_other.y)
                         if dist > 0:
@@ -494,6 +519,7 @@ class QuantumCollectorGame:
         fluctuations_to_remove = []
         new_fluctuations = []
         
+        # Lógica de interação entre flutuações (mantida)
         for i in range(len(self.fluctuations)):
             for j in range(i + 1, len(self.fluctuations)):
                 f1 = self.fluctuations[i]
@@ -503,7 +529,7 @@ class QuantumCollectorGame:
                     if (f1.state.replace("Anti", "").lower() == f2.state.replace("Anti", "").lower() and f1.state != f2.state) and random.random() < 0.8:
                         self.stable_particles.append(StableParticle(f1.x, f1.y, (0, 255, 0), "Electron", vx=random.uniform(-1, 1), vy=random.uniform(-1, 1)))
                         self.stable_particles.append(StableParticle(f2.x, f2.y, (255, 165, 0), "Positron", vx=random.uniform(-1, 1), vy=random.uniform(-1, 1)))
-                        self.matter_created += 2 # Nova partícula criada
+                        self.matter_created += 2
                         fluctuations_to_remove.extend([f1, f2])
                         for _ in range(30):
                             self.sparks.append(QuantumSpark((f1.x + f2.x)/2, (f1.y + f2.y)/2, (255, 255, 255)))
@@ -513,7 +539,7 @@ class QuantumCollectorGame:
                         new_vx = (f1.vx + f2.vx) / 2
                         new_vy = (f1.vy + f2.vy) / 2
                         self.stable_particles.append(StableParticle((f1.x + f2.x)/2, (f1.y + f2.y)/2, self.get_color_for_state("Red"), "Quark_UP", vx=new_vx, vy=new_vy))
-                        self.matter_created += 1 # Nova partícula criada
+                        self.matter_created += 1
                         fluctuations_to_remove.extend([f1, f2])
                         continue
                     
@@ -521,7 +547,7 @@ class QuantumCollectorGame:
                         new_vx = (f1.vx + f2.vx) / 2
                         new_vy = (f1.vy + f2.vy) / 2
                         self.stable_particles.append(StableParticle((f1.x + f2.x)/2, (f1.y + f2.y)/2, self.get_color_for_state("Blue"), "Quark_DOWN", vx=new_vx, vy=new_vy))
-                        self.matter_created += 1 # Nova partícula criada
+                        self.matter_created += 1
                         fluctuations_to_remove.extend([f1, f2])
                         continue
 
@@ -529,7 +555,7 @@ class QuantumCollectorGame:
                         new_vx = (f1.vx + f2.vx) / 2
                         new_vy = (f1.vy + f2.y) / 2
                         self.stable_particles.append(StableParticle((f1.x + f2.x)/2, (f1.y + f2.y)/2, self.get_color_for_state("Green"), "Quark_STRANGE", vx=new_vx, vy=new_vy))
-                        self.matter_created += 1 # Nova partícula criada
+                        self.matter_created += 1
                         fluctuations_to_remove.extend([f1, f2])
                         continue
 
@@ -568,105 +594,82 @@ class QuantumCollectorGame:
 
         particles_to_remove = []
         new_particles = []
+        
+        self.check_for_baryon_formation()
 
-        for p1 in self.stable_particles:
-            for p2 in self.stable_particles:
-                if p1 == p2:
-                    continue
+        # --- Lógica de Colisão de Partículas Estáveis (Corrigida) ---
+        for i in range(len(self.stable_particles)):
+            for j in range(i + 1, len(self.stable_particles)):
+                p1 = self.stable_particles[i]
+                p2 = self.stable_particles[j]
                 
-                if (p1.particle_type == "Electron" and p2.particle_type == "Positron") or \
-                   (p1.particle_type == "Positron" and p2.particle_type == "Electron"):
+                dist = math.hypot(p1.x - p2.x, p1.y - p2.y)
+                if dist < p1.size + p2.size:
                     
-                    dist = math.hypot(p1.x - p2.x, p1.y - p2.y)
-                    if dist < p1.size + p2.size:
+                    # 1. Aniquilação de Elétron-Pósitron
+                    if (p1.particle_type == "Electron" and p2.particle_type == "Positron") or \
+                       (p1.particle_type == "Positron" and p2.particle_type == "Electron"):
                         for _ in range(5):
                             self.photons.append(Photon((p1.x + p2.x) / 2, (p1.y + p2.y) / 2))
                         particles_to_remove.extend([p1, p2])
                         print("Aniquilação! Elétron e Pósitron se transformam em Fótons.")
-                
-                # --- Fusão de Próton e Nêutron para formar Deutério ---
-                if (p1.particle_type == "Proton" and p2.particle_type == "Neutron") or \
-                   (p1.particle_type == "Neutron" and p2.particle_type == "Proton"):
-                    
-                    dist = math.hypot(p1.x - p2.x, p1.y - p2.y)
-                    combined_velocity = math.hypot(p1.vx + p2.vx, p1.vy + p2.vy)
-                    
-                    if dist < NUCLEAR_THRESHOLD and combined_velocity > 1:
-                        particles_to_remove.extend([p1, p2])
-                        new_particles.append(StableParticle(p1.x, p1.y, (100, 100, 255), "Deuterium"))
-                        self.matter_stabilized += 1
-                        print("Fusão Nuclear! Um núcleo de Deutério foi formado!")
                         continue
-                
-                # --- Formação de Átomo de Deutério ---
-                if (p1.particle_type == "Deuterium" and p2.particle_type == "Electron") or \
-                   (p1.particle_type == "Electron" and p2.particle_type == "Deuterium"):
                     
-                    dist = math.hypot(p1.x - p2.x, p1.y - p2.y)
-                    if dist < NUCLEAR_THRESHOLD + 10:
-                        particles_to_remove.extend([p1, p2])
-                        new_particles.append(StableParticle(p1.x, p1.y, (150, 150, 255), "Deuterium Atom"))
-                        self.matter_stabilized += 1
-                        print("Átomo de Deutério foi formado pela captura de um Elétron!")
-                        continue
-
-                if p1.particle_type.startswith("Quark_") and p2.particle_type.startswith("Quark_"):
-                    dist = math.hypot(p1.x - p2.x, p1.y - p2.y)
-                    if dist < p1.size + p2.size:
-                        if (p1.particle_type == "Quark_UP" and p2.particle_type == "Quark_DOWN") or \
-                           (p1.particle_type == "Quark_DOWN" and p2.particle_type == "Quark_UP"):
-                            for _ in range(3):
-                                self.photons.append(Photon((p1.x + p2.x) / 2, (p1.y + p2.y) / 2))
+                    # 2. Fusão de Próton e Nêutron para formar Deutério (PRIORIDADE)
+                    if (p1.particle_type == "Proton" and p2.particle_type == "Neutron") or \
+                       (p1.particle_type == "Neutron" and p2.particle_type == "Proton"):
+                        combined_velocity = math.hypot(p1.vx + p2.vx, p1.vy + p2.vy)
+                        if dist < NUCLEAR_THRESHOLD and combined_velocity > 0.5:
                             particles_to_remove.extend([p1, p2])
-                            print("Aniquilação de Quarks para Fótons!")
-                
-                if p1.particle_type == "Neutron" and p2.particle_type == "Positron":
-                    dist = math.hypot(p1.x - p2.x, p1.y - p2.y)
-                    if dist < p1.size + p2.size:
-                        particles_to_remove.extend([p1, p2])
-                        new_particles.append(StableParticle(p1.x, p1.y, (255, 255, 0), "Proton"))
-                        self.matter_stabilized += 1
-                        print("Nêutron colide com Pósitron, virando um Próton!")
-                # --- Nova Lógica: Formação do Átomo de Hidrogênio ---
-                if (p1.particle_type == "Proton" and p2.particle_type == "Electron") or \
-                (p1.particle_type == "Electron" and p2.particle_type == "Proton"):
-                    dist = math.hypot(p1.x - p2.x, p1.y - p2.y)
-                    
-                    # Adicione uma condição para a colisão ou proximidade
-                    if dist < NUCLEAR_THRESHOLD + 10: # Use um limiar de distância para a formação
-                        particles_to_remove.extend([p1, p2])
-                        new_particles.append(StableParticle(p1.x, p1.y, (255, 255, 255), "Hydrogen Atom"))
-                        self.matter_stabilized += 1
-                        print("Um átomo de Hidrogênio foi formado!")
-                        continue
-                    
-                if p1.particle_type == "Proton":
-                    if p2.particle_type == "Electron":
-                        dist = math.hypot(p1.x - p2.x, p1.y - p2.y)
-                        
-                        if dist < 100:
-                            force_magnitude = 5 / (dist + 1)
-                            force_x = (p2.x - p1.x) / dist * force_magnitude
-                            force_y = (p2.y - p1.y) / dist * force_magnitude
-                            p1.vx += force_x
-                            p1.vy += force_y
-                            p2.vx -= force_x
-                            p2.vy -= force_y
-
-                        if dist < p1.size + p2.size:
-                            new_particles.append(StableParticle(p1.x, p1.y, (0, 0, 0), "Hydrogen"))
+                            new_particles.append(StableParticle(p1.x, p1.y, (100, 100, 255), "Deuterium"))
                             self.matter_stabilized += 1
+                            print("Fusão Nuclear! Um núcleo de Deutério foi formado!")
+                            continue
+                            
+                    # 3. Formação de Átomo de Hidrogênio
+                    if (p1.particle_type == "Proton" and p2.particle_type == "Electron") or \
+                       (p1.particle_type == "Electron" and p2.particle_type == "Proton"):
+                        if dist < NUCLEAR_THRESHOLD + 10:
                             particles_to_remove.extend([p1, p2])
+                            new_particles.append(StableParticle(p1.x, p1.y, (255, 255, 255), "Hydrogen Atom"))
+                            self.matter_stabilized += 1
                             print("Um átomo de Hidrogênio foi formado!")
-        
+                            continue
+
+                    # 4. Formação de Átomo de Deutério
+                    if (p1.particle_type == "Deuterium" and p2.particle_type == "Electron") or \
+                       (p1.particle_type == "Electron" and p2.particle_type == "Deuterium"):
+                        if dist < NUCLEAR_THRESHOLD + 10:
+                            particles_to_remove.extend([p1, p2])
+                            new_particles.append(StableParticle(p1.x, p1.y, (150, 150, 255), "Deuterium Atom"))
+                            self.matter_stabilized += 1
+                            print("Átomo de Deutério foi formado pela captura de um Elétron!")
+                            continue
+                            
+                    # 5. Aniquilação de Quarks
+                    #if p1.particle_type.startswith("Quark_") and p2.particle_type.startswith("Quark_"):
+                    #    if (p1.particle_type == "Quark_UP" and p2.particle_type == "Quark_DOWN") or \
+                    #       (p1.particle_type == "Quark_DOWN" and p2.particle_type == "Quark_UP"):
+                    #       for _ in range(3):
+                    #           self.photons.append(Photon((p1.x + p2.x) / 2, (p1.y + p2.y) / 2))
+                    #       particles_to_remove.extend([p1, p2])
+                    #        print("Aniquilação de Quarks para Fótons!")
+                    #        continue
+                    
+                    # 6. Decaimento de Nêutron em Próton
+                    if p1.particle_type == "Neutron" and p2.particle_type == "Positron":
+                        if dist < p1.size + p2.size:
+                            particles_to_remove.extend([p1, p2])
+                            new_particles.append(StableParticle(p1.x, p1.y, (255, 255, 0), "Proton"))
+                            self.matter_stabilized += 1
+                            print("Nêutron colide com Pósitron, virando um Próton!")
+                            continue
+
         for p in particles_to_remove:
             if p in self.stable_particles:
                 self.stable_particles.remove(p)
         self.stable_particles.extend(new_particles)
-        
-        #self.check_for_neutron_formation()
-        self.check_for_baryon_formation()
-    
+
     def check_for_baryon_formation(self):
         quarks = [p for p in self.stable_particles if p.particle_type.startswith("Quark_")]
 
@@ -676,49 +679,50 @@ class QuantumCollectorGame:
         particles_to_remove = []
         new_particles = []
 
-        # Loop para encontrar combinações de três quarks próximos
+        # Cria uma lista de quarks que podem se combinar
+        baryon_candidates = []
         for i in range(len(quarks)):
             for j in range(i + 1, len(quarks)):
                 for k in range(j + 1, len(quarks)):
                     q1, q2, q3 = quarks[i], quarks[j], quarks[k]
                     
+                    # Checa se os quarks estão próximos o suficiente para interagir
                     dist_ij = math.hypot(q1.x - q2.x, q1.y - q2.y)
                     dist_ik = math.hypot(q1.x - q3.x, q1.y - q3.y)
                     dist_jk = math.hypot(q2.x - q3.x, q2.y - q3.y)
 
                     if dist_ij < NUCLEAR_THRESHOLD and dist_ik < NUCLEAR_THRESHOLD and dist_jk < NUCLEAR_THRESHOLD:
-                        types = [q1.particle_type, q2.particle_type, q3.particle_type]
+                        baryon_candidates.append((q1, q2, q3))
 
-                        # Mapeamento para os tipos de quarks
-                        up_count = types.count("Quark_UP")
-                        down_count = types.count("Quark_DOWN")
-                        strange_count = types.count("Quark_STRANGE")
+        # Processa os candidatos a bárions
+        for q1, q2, q3 in baryon_candidates:
+            if q1 in particles_to_remove or q2 in particles_to_remove or q3 in particles_to_remove:
+                continue
+                
+            types = [q1.particle_type, q2.particle_type, q3.particle_type]
+            
+            up_count = types.count("Quark_UP")
+            down_count = types.count("Quark_DOWN")
+            strange_count = types.count("Quark_STRANGE")
 
-                        # Lógica para formar um Próton (dois Up, um Down)
-                        if up_count == 2 and down_count == 1:
-                            particles_to_remove.extend([q1, q2, q3])
-                            proton_x = statistics.mean([q1.x, q2.x, q3.x])
-                            proton_y = statistics.mean([q1.y, q2.y, q3.y])
-                            new_particles.append(StableParticle(proton_x, proton_y, (255, 255, 0), "Proton"))
-                            print("Um Próton foi formado!")
-                            
-                        # Lógica para formar um Nêutron (um Up, dois Down)
-                        elif up_count == 1 and down_count == 2:
-                            particles_to_remove.extend([q1, q2, q3])
-                            neutron_x = statistics.mean([q1.x, q2.x, q3.x])
-                            neutron_y = statistics.mean([q1.y, q2.y, q3.y])
-                            new_particles.append(StableParticle(neutron_x, neutron_y, (100, 100, 100), "Neutron"))
-                            print("Um Nêutron foi formado!")
-                        
-                        # Lógica para formar um Lambda (Up, Down, Strange)
-                        elif up_count == 1 and down_count == 1 and strange_count == 1:
-                            particles_to_remove.extend([q1, q2, q3])
-                            lambda_x = statistics.mean([q1.x, q2.x, q3.x])
-                            lambda_y = statistics.mean([q1.y, q2.y, q3.y])
-                            new_particles.append(StableParticle(lambda_x, lambda_y, (200, 0, 200), "Lambda"))
-                            print("Um bárion Lambda exótico foi formado!")
-                            
-        # Remove as partículas antigas e adiciona as novas
+            # Lógica para formar um Próton (dois Up, um Down)
+            if up_count == 2 and down_count == 1:
+                particles_to_remove.extend([q1, q2, q3])
+                proton_x = statistics.mean([q1.x, q2.x, q3.x])
+                proton_y = statistics.mean([q1.y, q2.y, q3.y])
+                new_particles.append(StableParticle(proton_x, proton_y, (255, 255, 0), "Proton"))
+                self.matter_stabilized += 1
+                print("Um Próton foi formado!")
+            
+            # Lógica para formar um Nêutron (um Up, dois Down)
+            elif up_count == 1 and down_count == 2:
+                particles_to_remove.extend([q1, q2, q3])
+                neutron_x = statistics.mean([q1.x, q2.x, q3.x])
+                neutron_y = statistics.mean([q1.y, q2.y, q3.y])
+                new_particles.append(StableParticle(neutron_x, neutron_y, (100, 100, 100), "Neutron"))
+                self.matter_stabilized += 1
+                print("Um Nêutron foi formado!")
+
         self.stable_particles = [p for p in self.stable_particles if p not in particles_to_remove]
         self.stable_particles.extend(new_particles)
 
