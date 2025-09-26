@@ -443,24 +443,24 @@ class QuantumCollectorGame:
         # 30% chance total para Antileptons (flutuações que formam elétrons/pósitrons)
         if center_value < 0.1: 
             return "Antired"
-        elif center_value < 0.3: 
+        elif center_value < 0.2: 
             return "Antigreen"
-        elif center_value < 0.5: 
+        elif center_value < 0.3: 
             return "Antiblue" 
         
-        # 10% chance para Quark UP (essencial para Prótons e Nêutrons)
+        # 30% chance para Quark UP (essencial para Prótons e Nêutrons)
         elif center_value < 0.6: 
             return "Red"   
         
-        # 40% chance total para Quark DOWN (o mais necessário para Nêutrons)
+        # 10% chance total para Quark DOWN (o mais necessário para Nêutrons)
         elif center_value < 0.7: 
             return "Blue"  # 20% aqui
         
         # 20% chance para Quark STRANGE (para manter a variedade, mas não dominante)
-        elif center_value < 0.8: 
+        elif center_value < 0.9: 
             return "Green" 
         
-        # 20% extra chance para Quark DOWN (garante a proporção 4:1 de D:U)
+        # 10% extra chance para Quark DOWN (garante a proporção 4:1 de D:U)
         else: 
             return "Blue"
 
@@ -553,14 +553,21 @@ class QuantumCollectorGame:
                     if p1.charge != 0 and p2.charge != 0:
                         safe_dist = max(dist, 5.0) 
                         
+                        # Cálculo da magnitude da força (já com o sinal de atração/repulsão)
                         force_em_mag = (p1.charge * p2.charge * EM_CONSTANT) / (safe_dist**2)
                         
+                        # Vetor de Força (aponta de p1 para p2, escalado pela magnitude)
                         force_x = force_em_mag * (p2.x - p1.x) / dist
                         force_y = force_em_mag * (p2.y - p1.y) / dist
-                        p1.vx += force_x
-                        p1.vy += force_y
-                        p2.vx -= force_x
-                        p2.vy -= force_y
+                        
+                        # CORREÇÃO CRÍTICA DO SINAL:
+                        # Aceleração de p1: Aplica-se o vetor de força INVERSO
+                        p1.vx -= force_x
+                        p1.vy -= force_y
+                        
+                        # Aceleração de p2: Aplica-se o vetor de força ORIGINAL
+                        p2.vx += force_x
+                        p2.vy += force_y
                     
                     # Lógica de Força Nuclear Forte (para prótons e nêutrons)
                     if p1.particle_type in ["Proton", "Neutron"] and p2.particle_type in ["Proton", "Neutron"]:
