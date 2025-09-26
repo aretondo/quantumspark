@@ -1,6 +1,6 @@
 # Quantum Collector: Uma Jornada pelo Caos Quântico
 
-![Gameplay do Quantum Collector](https://raw.githubusercontent.com/adrian-martins/Quantum-Collector/main/docs/gameplay.gif)
+![Gameplay do Quantum Collector](https://raw.githubusercontent.com/aretondo/quantumspark/main/docs/gameplay.gif)
 
 ## Resumo do Projeto
 
@@ -19,8 +19,8 @@ Para rodar o **Quantum Collector**, você precisará ter o Python 3.10 ou superi
 
 1.  **Clone o Repositório:**
     ```bash
-    git clone [https://github.com/adrian-martins/Quantum-Collector.git](https://github.com/adrian-martins/Quantum-Collector.git)
-    cd Quantum-Collector
+    git clone [https://github.com/aretondo/quantumspark.git](https://github.com/aretondo/quantumspark.git)
+    cd quantumspark
     ```
 
 2.  **Instale as Dependências:**
