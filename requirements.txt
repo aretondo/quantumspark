@@ -1,0 +1,4 @@
+pygame
+qiskit
+qiskit-aer
+dotenv
