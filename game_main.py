@@ -381,18 +381,29 @@ class QuantumCollectorGame:
         return "Neutral", (150, 150, 150)
         
     def interpret_branch(self, center_value):
-        # Aumentando a chance de criar quarks em relação aos pares que formam elétrons/pósitrons
-        if center_value < 0.2: # Baixa chance para elétrons
+        # 30% chance total para Antileptons (flutuações que formam elétrons/pósitrons)
+        if center_value < 0.1: 
             return "Antired"
-        elif center_value < 0.4: # Baixa chance para elétrons
+        elif center_value < 0.2: 
             return "Antigreen"
-        elif center_value < 0.6: # Baixa chance para elétrons
+        elif center_value < 0.3: 
             return "Antiblue" 
-        elif center_value < 0.8: # Aumente o intervalo de chance para quarks
-            if center_value < 0.7: return "Blue" # Chance maior para Quark DOWN
-            else: return "Red" # Chance para Quark UP
-        else:
-            return "Green" # E um pouco de chance para Quark Strange
+        
+        # 10% chance para Quark UP (essencial para Prótons e Nêutrons)
+        elif center_value < 0.4: 
+            return "Red"   
+        
+        # 40% chance total para Quark DOWN (o mais necessário para Nêutrons)
+        elif center_value < 0.6: 
+            return "Blue"  # 20% aqui
+        
+        # 20% chance para Quark STRANGE (para manter a variedade, mas não dominante)
+        elif center_value < 0.8: 
+            return "Green" 
+        
+        # 20% extra chance para Quark DOWN (garante a proporção 4:1 de D:U)
+        else: 
+            return "Blue"
 
     def spawn_fluctuation(self):
         self.spawn_counter += 1
@@ -619,7 +630,7 @@ class QuantumCollectorGame:
                     if (p1.particle_type == "Proton" and p2.particle_type == "Neutron") or \
                        (p1.particle_type == "Neutron" and p2.particle_type == "Proton"):
                         combined_velocity = math.hypot(p1.vx + p2.vx, p1.vy + p2.vy)
-                        if dist < NUCLEAR_THRESHOLD and combined_velocity > 0.5:
+                        if dist < NUCLEAR_THRESHOLD and combined_velocity > 1:
                             particles_to_remove.extend([p1, p2])
                             new_particles.append(StableParticle(p1.x, p1.y, (100, 100, 255), "Deuterium"))
                             self.matter_stabilized += 1
@@ -646,134 +657,128 @@ class QuantumCollectorGame:
                             print("Átomo de Deutério foi formado pela captura de um Elétron!")
                             continue
                             
-                    # 5. Aniquilação de Quarks
-                    #if p1.particle_type.startswith("Quark_") and p2.particle_type.startswith("Quark_"):
-                    #    if (p1.particle_type == "Quark_UP" and p2.particle_type == "Quark_DOWN") or \
-                    #       (p1.particle_type == "Quark_DOWN" and p2.particle_type == "Quark_UP"):
-                    #       for _ in range(3):
-                    #           self.photons.append(Photon((p1.x + p2.x) / 2, (p1.y + p2.y) / 2))
-                    #       particles_to_remove.extend([p1, p2])
-                    #        print("Aniquilação de Quarks para Fótons!")
-                    #        continue
-                    
-                    # 6. Decaimento de Nêutron em Próton
-                    if p1.particle_type == "Neutron" and p2.particle_type == "Positron":
-                        if dist < p1.size + p2.size:
-                            particles_to_remove.extend([p1, p2])
-                            new_particles.append(StableParticle(p1.x, p1.y, (255, 255, 0), "Proton"))
-                            self.matter_stabilized += 1
-                            print("Nêutron colide com Pósitron, virando um Próton!")
-                            continue
+                  # 6. Decaimento de Nêutron em Próton
+                  #  if p1.particle_type == "Neutron" and p2.particle_type == "Positron":
+                  #      if dist < p1.size + p2.size:
+                  #          particles_to_remove.extend([p1, p2])
+                  #          new_particles.append(StableParticle(p1.x, p1.y, (255, 255, 0), "Proton"))
+                  #          self.matter_stabilized += 1
+                  #          print("Nêutron colide com Pósitron, virando um Próton!")
+                  #          continue
 
         for p in particles_to_remove:
             if p in self.stable_particles:
                 self.stable_particles.remove(p)
         self.stable_particles.extend(new_particles)
 
+# NOVO: Implementação completa da formação de bárions, incluindo Lambda
     def check_for_baryon_formation(self):
         quarks = [p for p in self.stable_particles if p.particle_type.startswith("Quark_")]
-
-        if len(quarks) < 3:
-            return
-
+        
         particles_to_remove = []
         new_particles = []
-
-        # Cria uma lista de quarks que podem se combinar
-        baryon_candidates = []
+        
+        # Itera sobre todos os trios de quarks para checar por combinações
         for i in range(len(quarks)):
             for j in range(i + 1, len(quarks)):
                 for k in range(j + 1, len(quarks)):
                     q1, q2, q3 = quarks[i], quarks[j], quarks[k]
                     
-                    # Checa se os quarks estão próximos o suficiente para interagir
-                    dist_ij = math.hypot(q1.x - q2.x, q1.y - q2.y)
-                    dist_ik = math.hypot(q1.x - q3.x, q1.y - q3.y)
-                    dist_jk = math.hypot(q2.x - q3.x, q2.y - q3.y)
+                    # Simples verificação de proximidade (dentro de 3x o NUCLEAR_THRESHOLD)
+                    center_x = (q1.x + q2.x + q3.x) / 3
+                    center_y = (q1.y + q2.y + q3.y) / 3
+                    
+                    if math.hypot(q1.x - center_x, q1.y - center_y) < NUCLEAR_THRESHOLD * 3 and \
+                       math.hypot(q2.x - center_x, q2.y - center_y) < NUCLEAR_THRESHOLD * 3 and \
+                       math.hypot(q3.x - center_x, q3.y - center_y) < NUCLEAR_THRESHOLD * 3:
+                        
+                        # Usa um multiset para verificar a composição do trio
+                        types = sorted([q1.particle_type, q2.particle_type, q3.particle_type])
+                        
+                        # Evita processar quarks que já foram marcados para remoção
+                        if q1 in particles_to_remove or q2 in particles_to_remove or q3 in particles_to_remove:
+                            continue
 
-                    if dist_ij < NUCLEAR_THRESHOLD and dist_ik < NUCLEAR_THRESHOLD and dist_jk < NUCLEAR_THRESHOLD:
-                        baryon_candidates.append((q1, q2, q3))
-
-        # Processa os candidatos a bárions
-        for q1, q2, q3 in baryon_candidates:
-            if q1 in particles_to_remove or q2 in particles_to_remove or q3 in particles_to_remove:
-                continue
-                
-            types = [q1.particle_type, q2.particle_type, q3.particle_type]
-            
-            up_count = types.count("Quark_UP")
-            down_count = types.count("Quark_DOWN")
-            strange_count = types.count("Quark_STRANGE")
-
-            # Lógica para formar um Próton (dois Up, um Down)
-            if up_count == 2 and down_count == 1:
-                particles_to_remove.extend([q1, q2, q3])
-                proton_x = statistics.mean([q1.x, q2.x, q3.x])
-                proton_y = statistics.mean([q1.y, q2.y, q3.y])
-                new_particles.append(StableParticle(proton_x, proton_y, (255, 255, 0), "Proton"))
-                self.matter_stabilized += 1
-                print("Um Próton foi formado!")
-            
-            # Lógica para formar um Nêutron (um Up, dois Down)
-            elif up_count == 1 and down_count == 2:
-                particles_to_remove.extend([q1, q2, q3])
-                neutron_x = statistics.mean([q1.x, q2.x, q3.x])
-                neutron_y = statistics.mean([q1.y, q2.y, q3.y])
-                new_particles.append(StableParticle(neutron_x, neutron_y, (100, 100, 100), "Neutron"))
-                self.matter_stabilized += 1
-                print("Um Nêutron foi formado!")
-
+                        # --- Lambda Baryon (Up + Down + Strange) ---
+                        if types == ['Quark_DOWN', 'Quark_STRANGE', 'Quark_UP']:
+                            particles_to_remove.extend([q1, q2, q3])
+                            avg_vx = (q1.vx + q2.vx + q3.vx) / 3
+                            avg_vy = (q1.vy + q2.vy + q3.vy) / 3
+                            # Cor roxa para o Lambda (UDS, carga zero)
+                            new_particles.append(StableParticle(center_x, center_y, (180, 0, 180), "Lambda", vx=avg_vx, vy=avg_vy))
+                            self.matter_stabilized += 1
+                            print("Bárion Lambda (Up, Down, Strange) formado!")
+                            
+                        # --- Proton (Up + Up + Down) ---
+                        elif types == ['Quark_DOWN', 'Quark_UP', 'Quark_UP']: 
+                            particles_to_remove.extend([q1, q2, q3])
+                            avg_vx = (q1.vx + q2.vx + q3.vx) / 3
+                            avg_vy = (q1.vy + q2.vy + q3.vy) / 3
+                            # Cor amarela para o Próton (UUD, carga +1)
+                            new_particles.append(StableParticle(center_x, center_y, (255, 255, 0), "Proton", vx=avg_vx, vy=avg_vy))
+                            self.matter_stabilized += 1
+                            print("Próton (Up, Up, Down) formado!")
+                            
+                        # --- Neutron (Up + Down + Down) ---
+                        elif types == ['Quark_DOWN', 'Quark_DOWN', 'Quark_UP']:
+                            particles_to_remove.extend([q1, q2, q3])
+                            avg_vx = (q1.vx + q2.vx + q3.vx) / 3
+                            avg_vy = (q1.vy + q2.vy + q3.vy) / 3
+                            # Cor cinza para o Nêutron (UDD, carga 0)
+                            new_particles.append(StableParticle(center_x, center_y, (150, 150, 150), "Neutron", vx=avg_vx, vy=avg_vy))
+                            self.matter_stabilized += 1
+                            print("Nêutron (Up, Down, Down) formado!")
+                            
+        # Aplica as remoções e adições
         self.stable_particles = [p for p in self.stable_particles if p not in particles_to_remove]
         self.stable_particles.extend(new_particles)
 
-    def check_for_neutron_formation(self):
-        quarks = [p for p in self.stable_particles if p.particle_type.startswith("Quark_")]
-        
-        if len(quarks) >= 3:
-            for i in range(len(quarks)):
-                for j in range(i + 1, len(quarks)):
-                    for k in range(j + 1, len(quarks)):
-                        q1, q2, q3 = quarks[i], quarks[j], quarks[k]
-                        
-                        types = {q1.particle_type, q2.particle_type, q3.particle_type}
-                        if len(types) == 3:
-                            dist_ij = math.hypot(q1.x - q2.x, q1.y - q2.y)
-                            dist_ik = math.hypot(q1.x - q3.x, q1.y - q3.y)
-                            dist_jk = math.hypot(q2.x - q3.x, q2.y - q3.y)
-                            
-                            if dist_ij < 150 and dist_ik < 150 and dist_jk < 150:
-                                neutron_x = statistics.mean([q1.x, q2.x, q3.x])
-                                neutron_y = statistics.mean([q1.y, q2.y, q3.y])
-                                neutron_vx = statistics.mean([q1.vx, q2.vx, q3.vx])
-                                neutron_vy = statistics.mean([q1.vy, q2.vy, q3.vy])
 
-                                self.stable_particles.remove(q1)
-                                self.stable_particles.remove(q2)
-                                self.stable_particles.remove(q3)
-                                self.stable_particles.append(StableParticle(neutron_x, neutron_y, (100, 100, 100), "Neutron", 0, vx=neutron_vx, vy=neutron_vy))
-                                self.matter_stabilized += 1
-                                print("Um Nêutron foi formado!")
-                                return
-    
+    # NOVO: Implementação completa do decaimento de quarks e nêutrons
     def check_for_quantum_decay(self):
-        particles_to_decay = []
-        for p in self.stable_particles:
-            if not p.is_long_lived and p.decay_countdown <= 0:
-                qc = p.quantum_circuit
-                circ = transpile(qc, self.sim, optimization_level=0)
-                result = self.sim.run(circ, shots=1).result()
-                counts = result.get_counts(circ)
-                
-                if '1' in counts:
-                    print(f"Partícula {p.particle_type} decaiu!")
-                    particles_to_decay.append(p)
+        particles_to_remove = []
+        new_particles = []
         
-        for p in particles_to_decay:
-            if p.particle_type.startswith("Quark_"):
-                self.stable_particles.remove(p)
-                self.stable_particles.append(StableParticle(p.x, p.y, (0, 255, 0), "Electron", vx=random.uniform(-1, 1), vy=random.uniform(-1, 1)))
-                self.stable_particles.append(StableParticle(p.x, p.y, (255, 255, 0), "Proton", vx=random.uniform(-1, 1), vy=random.uniform(-1, 1)))
+        # Chance por frame para decaimento (~1 minuto de meia-vida a 60 FPS)
+        NEUTRON_DECAY_CHANCE = 0.0005  
+        # Chance por frame para decaimento do Strange
+        STRANGE_DECAY_CHANCE = 0.001  
+        
+        for p in self.stable_particles:
+            
+            # 1. Decaimento Beta do Nêutron (Neutron -> Proton + Electron)
+            if p.particle_type == "Neutron" and random.random() < NEUTRON_DECAY_CHANCE:
+                particles_to_remove.append(p)
+                # Cria um Próton no lugar
+                new_particles.append(StableParticle(p.x, p.y, (255, 255, 0), "Proton", vx=p.vx, vy=p.vy))
+                # Cria um Elétron (Beta)
+                new_particles.append(StableParticle(p.x + 5, p.y + 5, (0, 255, 0), "Electron", vx=random.uniform(-1, 1), vy=random.uniform(-1, 1)))
+                print("Decaimento Beta: Nêutron -> Próton + Elétron (e Antineutrino, simplificado)")
+                # Faísca para representar a energia liberada
+                for _ in range(5): self.sparks.append(QuantumSpark(p.x, p.y, (100, 100, 255)))
+                
+            # 2. Decaimento do Quark Estranho (Strange -> Up/Down)
+            elif p.particle_type == "Quark_STRANGE" and random.random() < STRANGE_DECAY_CHANCE:
+                particles_to_remove.append(p)
+                
+                # Strange decai principalmente para UP (cerca de 94% de chance)
+                if random.random() < 0.94:
+                    new_type = "Quark_UP"
+                    new_color = self.get_color_for_state("Red")
+                else:
+                    new_type = "Quark_DOWN"
+                    new_color = self.get_color_for_state("Blue")
 
+                # Cria o novo Quark (mais leve)
+                new_particles.append(StableParticle(p.x, p.y, new_color, new_type, vx=p.vx, vy=p.vy))
+                
+                # Energia liberada (W boson, leptons, etc.) simplificada para um fóton
+                self.photons.append(Photon(p.x, p.y))
+                print(f"Decaimento Fraco: Quark Estranho -> {new_type.replace('Quark_', '')}")
+                
+        # Aplica as alterações
+        self.stable_particles = [p for p in self.stable_particles if p not in particles_to_remove]
+        self.stable_particles.extend(new_particles)
 
 # -----------------------
 # Visual (pygame)
