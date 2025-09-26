@@ -19,7 +19,7 @@ WIDTH = int(os.getenv("WIDTH", 1920))
 HEIGHT = int(os.getenv("HEIGHT", 1080))
 
 # A taxa de criação de novas flutuações, em milissegundos.
-SPAWN_DELAY_MS = int(os.getenv("SPAWN_DELAY_MS", 500))
+SPAWN_MULTIPLIER = float(os.getenv("SPAWN_MULTIPLIER", 0.5))
 
 # O nível de caos (r) decai a cada N flutuações criadas.
 R_DECAY_INTERVAL = int(os.getenv("R_DECAY_INTERVAL", 50))
@@ -442,10 +442,10 @@ class QuantumCollectorGame:
                     fluctuation.vy += force_direction_y * force_magnitude * 0.005
         
         # --- Lógica de Interação Eletromagnética e Gravitacional ---
-        for i, p1 in enumerate(self.stable_particles):
-            for j, p2 in enumerate(self.stable_particles):
-                if i == j:
-                    continue
+        for i in range(len(self.stable_particles)):
+            for j in range(i + 1, len(self.stable_particles)):
+                p1 = self.stable_particles[i]
+                p2 = self.stable_particles[j]
 
                 dist = math.hypot(p1.x - p2.x, p1.y - p2.y)
                 if dist == 0: continue
@@ -620,7 +620,7 @@ class QuantumCollectorGame:
                         self.matter_stabilized += 1
                         print("Nêutron colide com Pósitron, virando um Próton!")
 
-                if p1.particle_type == "Neutron":
+                if p1.particle_type == "Proton":
                     if p2.particle_type == "Electron":
                         dist = math.hypot(p1.x - p2.x, p1.y - p2.y)
                         
@@ -779,6 +779,13 @@ def main():
     game = QuantumCollectorGame()
     running = True
     mouse_pressed = False
+    
+    # Adicione a variável para rastrear o estado do mapa logístico
+    game.logistic_x = random.uniform(0.1, 0.9)
+    
+    # Adicione a variável r para o nível de caos (se ainda não estiver na classe)
+    # Se já estiver, remova esta linha
+    game.r = 4.0 
 
     while running:
         current_time = pygame.time.get_ticks()
@@ -795,10 +802,15 @@ def main():
                 mouse_pressed = False
                 game.mouse_pos = None
         
-        # Lógica do jogo
-        if current_time - game.last_spawn_time > SPAWN_DELAY_MS:
+        # --- Nova Lógica de Spawn ---
+        # Atualiza o valor do mapa logístico a cada frame
+        game.logistic_x = game.r * game.logistic_x * (1 - game.logistic_x)
+
+        # Usa a probabilidade do mapa logístico para decidir se cria uma flutuação
+        # O fator de 0.5 é um multiplicador para ajustar a frequência de spawn
+        # Sinta-se à vontade para ajustar esse valor para o que funcionar melhor
+        if random.random() < game.logistic_x * SPAWN_MULTIPLIER:
             game.spawn_fluctuation()
-            game.last_spawn_time = current_time
 
         game.check_interactions(mouse_pressed)
         game.check_for_quantum_decay()
