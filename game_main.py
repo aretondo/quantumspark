@@ -209,22 +209,13 @@ class StableParticle:
         self.is_long_lived = True
         self.charge = 0
 
-        # Define as propriedades de cada tipo de partícula
-        if self.particle_type == "Proton":
-            self.charge = 1
-        elif self.particle_type == "Electron":
-            self.charge = -1
-        elif self.particle_type == "Positron":
-            self.charge = 1
-        elif self.particle_type == "Deuterium": # Núcleo de Deutério
-            self.charge = 1
-            self.size = 15
-        elif self.particle_type == "Deuterium Atom": # Átomo de Deutério
-            self.charge = 0
-            self.size = 20
-        elif self.particle_type == "Hydrogen Atom":
-            self.charge = 0
-            self.size = 12
+        # Definição de carga e tamanho
+        if particle_type in ["Proton", "Positron", "Deuterium", "Hydrogen Atom", "Deuterium Atom"]:
+            self.charge = 1.0
+        elif particle_type in ["Electron", "Pion_MINUS"]: # <--- ADICIONE PION_MINUS AQUI
+            self.charge = -1.0
+        elif particle_type in ["Neutron", "Lambda"]:
+            self.charge = 0.0
 
         if self.particle_type.startswith("Quark_"):
             self.is_long_lived = False
@@ -268,6 +259,11 @@ class StableParticle:
             if self.new_timer <= 0:
                 self.is_new = False
                 self.blink_state = True
+
+    def determine_size(self, particle_type):
+        if particle_type.startswith("Quark_"): return 5
+        if particle_type in ["Electron", "Positron", "Pion_MINUS"]: return 4 # <--- ADICIONE PION_MINUS AQUI
+        if particle_type in ["Proton", "Neutron", "Lambda"]: return 8
 
     def draw(self, screen):
         # Nao desenha se estiver piscando
@@ -743,6 +739,8 @@ class QuantumCollectorGame:
         NEUTRON_DECAY_CHANCE = 0.0005  
         # Chance por frame para decaimento do Strange
         STRANGE_DECAY_CHANCE = 0.001  
+        # Chance por frame para decaimento do Lambda
+        LAMBDA_DECAY_CHANCE = 0.005
         
         for p in self.stable_particles:
             
@@ -775,6 +773,20 @@ class QuantumCollectorGame:
                 # Energia liberada (W boson, leptons, etc.) simplificada para um fóton
                 self.photons.append(Photon(p.x, p.y))
                 print(f"Decaimento Fraco: Quark Estranho -> {new_type.replace('Quark_', '')}")
+            
+            # 3. Decaimento do Bárion Lambda (Lambda -> Proton + Pion Negativo)
+            elif p.particle_type == "Lambda" and random.random() < LAMBDA_DECAY_CHANCE:
+                particles_to_remove.append(p)
+                
+                # Cria um Próton (carga +1, cor amarela)
+                new_particles.append(StableParticle(p.x, p.y, (255, 255, 0), "Proton", vx=p.vx, vy=p.vy))
+                
+                # Cria um Píon Negativo (carga -1, cor rosa para contraste)
+                new_particles.append(StableParticle(p.x + 5, p.y + 5, (255, 100, 100), "Pion_MINUS", vx=random.uniform(-1, 1), vy=random.uniform(-1, 1)))
+
+                print("Decaimento Fraco: Bárion Lambda -> Próton + Píon Negativo")
+                # Faísca para representar a energia liberada
+                for _ in range(10): self.sparks.append(QuantumSpark(p.x, p.y, (180, 0, 180)))
                 
         # Aplica as alterações
         self.stable_particles = [p for p in self.stable_particles if p not in particles_to_remove]
@@ -827,7 +839,7 @@ def draw_hud(game):
     quark_title = font.render("Quarks", True, (0, 255, 255))
     screen.blit(quark_title, (hud_x_offset, y_offset))
     y_offset += 30
-    quark_types = ["Quark_UP", "Quark_DOWN", "Quark_STRANGE"]
+    quark_types = ["Quark_UP", "Quark_DOWN", "Quark_STRANGE", "Pion_MINUS"]
     for q_type in quark_types:
         count = counts.get(q_type, 0)
         text = font.render(f"  {q_type.replace('Quark_', '')}: {count}", True, (150, 150, 150))
