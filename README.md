@@ -61,3 +61,4 @@ Seu principal objetivo é estabilizar a matéria antes que ela decaia ou seja an
 3.  **Formação de Átomos:** As forças eletromagnéticas permitem a formação de átomos:
     * **Núcleo de Deutério + Elétron = Átomo de Deutério**
 4.  **Formação de Nêutrons:** Em um evento raro, três quarks podem se unir para formar um **Nêutron**.
+5.  **Formação de Hidrogênio:** Um **Nêutron** podem capturar um elétron para formar um **Hidrogênio**.
