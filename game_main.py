@@ -18,6 +18,10 @@ load_dotenv()
 WIDTH = int(os.getenv("WIDTH", 1920))
 HEIGHT = int(os.getenv("HEIGHT", 1080))
 
+# Reduza este valor se o lag persistir.
+MAX_OBJECTS = 500
+MAX_VELOCITY = 500000.0
+
 # A taxa de criação de novas flutuações, em milissegundos.
 SPAWN_MULTIPLIER = float(os.getenv("SPAWN_MULTIPLIER", 0.5))
 
@@ -150,7 +154,20 @@ class Fluctuation:
         self.num_points = 12
         self.distortion_factor = 5
 
-        self.quantum_circuit = self.create_quantum_circuit(self.state)
+        #self.quantum_circuit = self.create_quantum_circuit(self.state)
+        self.quantum_circuit = None
+        self.creation_time = pygame.time.get_ticks()
+   
+    def get_complexity_proxy(self):
+        """
+        Substitui f.quantum_circuit.num_qubits para fins de desempenho.
+        Retorna um valor constante seguro se o circuito for None.
+        """
+        # Como o circuito padrão teria 1 qubit, retornamos 1
+        if self.quantum_circuit is None:
+            return 1 
+        else:
+            return self.quantum_circuit.num_qubits
 
     def create_quantum_circuit(self, state):
         qc = QuantumCircuit(1, 1)
@@ -197,7 +214,7 @@ class StableParticle:
         self.y = y
         self.color = color
         self.particle_type = particle_type
-        self.size = 5
+        self.size = 10
         self.magnetic_field_strength = magnetic_field_strength
         self.angle = random.uniform(0, 360)
         self.spin_speed = random.uniform(-3, 3)
@@ -236,9 +253,23 @@ class StableParticle:
 
     def update(self):
         self.angle += self.spin_speed
+        
+        # 1. Aplica o Damping (Amortecimento) para reduzir o caos
+        #self.vx *= 0.985 
+        #self.vy *= 0.985 
+        
+        # 2. Aplica o Movimento
         self.x += self.vx
         self.y += self.vy
 
+        # 3. Limite de Velocidade (Capping) para evitar quebras
+        #current_speed = math.hypot(self.vx, self.vy)
+        #if current_speed > MAX_VELOCITY:
+            # Reduz a velocidade para o limite, mantendo a direção
+            #scale = MAX_VELOCITY / current_speed 
+            #self.vx *= scale
+            #self.vy *= scale
+            
         if self.x < 0:
             self.x = WIDTH
         elif self.x > WIDTH:
@@ -289,6 +320,30 @@ class StableParticle:
             pygame.draw.circle(screen, (0, 255, 0), (int(electron_x), int(electron_y)), 5)
             return
         
+        # Desenho para Lambda (Partícula Estranha)
+        if self.particle_type == "Lambda":
+            # 1. Base: Círculo principal (cor neutra, mas com tom "estranho")
+            # Usaremos um tom magenta/púrpura que é frequentemente associado a partículas Strange.
+            pygame.draw.circle(screen, (150, 50, 150), (int(self.x), int(self.y)), 15) # Círculo de base
+            
+            # 2. Marcador de Bárion: Triângulo (3 Quarks)
+            points = []
+            size = 18 # Ligeiramente maior que o próton (massa maior)
+            
+            # Triângulo invertido (ou com rotação única) para simbolizar a estranheza (diferente do Próton)
+            # A rotação de 180 graus diferencia-o do Próton (que provavelmente usa 0 graus).
+            for i in range(3):
+                angle = math.radians(i * 120 + self.angle + 180) # +180 graus inverte o triângulo
+                px = self.x + size * math.cos(angle)
+                py = self.y + size * math.sin(angle)
+                points.append((px, py))
+                
+            # Cor do preenchimento: Um verde/ciano vibrante para representar a energia do Strange Quark
+            pygame.draw.polygon(screen, (0, 255, 255), points) 
+            
+            # 3. Sem Campo Eletromagnético: O Lambda é neutro (Q=0), então não deve ter o círculo de borda vibrante.
+            return
+        
         if self.particle_type == "Proton":
             pygame.draw.circle(screen, (255, 255, 0), (int(self.x), int(self.y)), 12)
             points = []
@@ -315,6 +370,7 @@ class StableParticle:
 
         num_points = 6
         distortion = 1 
+        # Assume que 'generate_wave_shape' está definido no seu código
         points = generate_wave_shape(self.x, self.y, self.size, num_points, distortion, self.angle)
         
         if self.particle_type == "Neutron" and self.is_captured:
@@ -323,20 +379,24 @@ class StableParticle:
         else:
             pygame.draw.polygon(screen, self.color, points)
         
-        if self.particle_type != "Neutron" and self.particle_type != "Proton":
+        # --- OTIMIZAÇÃO: Substituição do campo transparente (Surface/SRCALPHA) por uma Borda Vibrante ---
+        if self.particle_type == "Electron" or self.particle_type == "Positron":
             field_radius = 50 + self.magnetic_field_strength * 100
-            field_surface = pygame.Surface((field_radius * 2, field_radius * 2), pygame.SRCALPHA)
-            alpha = 50 
             
+            # 1. Determina a cor do campo
             if "Anti" in self.particle_type: 
-                field_color = (255, 0, 0, alpha) 
+                field_color = (255, 0, 0) # Vermelho vibrante para Anti-matéria
             elif self.particle_type == "Positron":
-                field_color = (255, 165, 0, alpha)
+                field_color = (255, 165, 0) # Laranja vibrante para Pósitron
             else: 
-                field_color = (0, 0, 255, alpha) 
-
-            pygame.draw.circle(field_surface, field_color, (field_radius, field_radius), field_radius)
-            screen.blit(field_surface, (self.x - field_radius, self.y - field_radius))
+                field_color = (0, 0, 255) # Azul vibrante para Partículas carregadas
+            
+            # 2. Desenha o círculo DE BORDA (width=1) diretamente na tela.
+            # Esta linha substitui toda a lógica de Surface, SRCALPHA e blit, resolvendo o lag.
+            pygame.draw.circle(screen, field_color, 
+                               (int(self.x), int(self.y)), 
+                               int(field_radius), 
+                               1) # O valor '1' garante que apenas a borda seja desenhada.
 
 # -----------------------
 # Game logic
@@ -357,6 +417,9 @@ class QuantumCollectorGame:
         self.sim = AerSimulator()
         self.matter_created = 0
         self.matter_stabilized = 0
+        self.force_update_counter = 0
+        self.baryon_check_counter = 0 
+        self.quantum_decay_counter = 0
         
     def get_color_for_state(self, state):
         if state == "Red": return (255, 0, 0)
@@ -380,17 +443,17 @@ class QuantumCollectorGame:
         # 30% chance total para Antileptons (flutuações que formam elétrons/pósitrons)
         if center_value < 0.1: 
             return "Antired"
-        elif center_value < 0.2: 
-            return "Antigreen"
         elif center_value < 0.3: 
+            return "Antigreen"
+        elif center_value < 0.5: 
             return "Antiblue" 
         
         # 10% chance para Quark UP (essencial para Prótons e Nêutrons)
-        elif center_value < 0.4: 
+        elif center_value < 0.6: 
             return "Red"   
         
         # 40% chance total para Quark DOWN (o mais necessário para Nêutrons)
-        elif center_value < 0.6: 
+        elif center_value < 0.7: 
             return "Blue"  # 20% aqui
         
         # 20% chance para Quark STRANGE (para manter a variedade, mas não dominante)
@@ -403,6 +466,9 @@ class QuantumCollectorGame:
 
     def spawn_fluctuation(self):
         self.spawn_counter += 1
+        if len(self.fluctuations) + len(self.stable_particles) >= MAX_OBJECTS:
+             return
+        
         if self.spawn_counter >= R_DECAY_INTERVAL:
             self.r = max(3.0, self.r - R_DECAY_RATE) 
             self.spawn_counter = 0
@@ -444,7 +510,7 @@ class QuantumCollectorGame:
 
         anti_fluctuation = Fluctuation(x_pos + 50, y_pos + 50, new_fluctuation_center, anti_color, self, chaos_level, vx=-vx, vy=-vy)
         self.fluctuations.append(anti_fluctuation)
-
+    
     def check_interactions(self, mouse_pressed):
         
         # Lógica de Interação com o Mouse (Sem Alterações)
@@ -468,50 +534,58 @@ class QuantumCollectorGame:
                     fluctuation.vy += force_direction_y * force_magnitude * 0.005
         
         # --- Lógica de Interação Eletromagnética e Gravitacional ---
-        # Loop otimizado
-        for i in range(len(self.stable_particles)):
-            for j in range(i + 1, len(self.stable_particles)):
-                p1 = self.stable_particles[i]
-                p2 = self.stable_particles[j]
+        FORCE_UPDATE_FREQUENCY = 3 # Recalcula forças a cada 3 frames
 
-                dist = math.hypot(p1.x - p2.x, p1.y - p2.y)
-                if dist == 0: continue
-                
-                # Interação Eletromagnética
-                if p1.charge != 0 and p2.charge != 0:
-                    force_em_mag = (p1.charge * p2.charge * EM_CONSTANT) / (dist**2) 
+        self.force_update_counter += 1
+        
+        # Note: EM_CONSTANT, GRAVITY_CONSTANT, NUCLEAR_THRESHOLD precisam estar definidos (do .env)
+        if self.force_update_counter % FORCE_UPDATE_FREQUENCY == 0:
+            self.force_update_counter = 0
+            for i in range(len(self.stable_particles)):
+                for j in range(i + 1, len(self.stable_particles)):
+                    p1 = self.stable_particles[i]
+                    p2 = self.stable_particles[j]
+
+                    dist = math.hypot(p1.x - p2.x, p1.y - p2.y)
+                    if dist == 0: continue
                     
-                    force_x = force_em_mag * (p2.x - p1.x) / dist
-                    force_y = force_em_mag * (p2.y - p1.y) / dist
-                    p1.vx += force_x
-                    p1.vy += force_y
-                    p2.vx -= force_x
-                    p2.vy -= force_y
-                
-                # Lógica de Força Nuclear Forte (para prótons e nêutrons)
-                if p1.particle_type in ["Proton", "Neutron"] and p2.particle_type in ["Proton", "Neutron"]:
-                    NUCLEAR_DISTANCE_THRESHOLD = NUCLEAR_THRESHOLD
-                    NUCLEAR_ATTRACTION_CONSTANT = -2000 
-                    
-                    if dist < NUCLEAR_DISTANCE_THRESHOLD:
-                        force_nuclear = (NUCLEAR_ATTRACTION_CONSTANT / dist)
-                        force_x = force_nuclear * (p2.x - p1.x) / dist
-                        force_y = force_nuclear * (p2.y - p1.y) / dist
+                    # Interação Eletromagnética
+                    if p1.charge != 0 and p2.charge != 0:
+                        safe_dist = max(dist, 5.0) 
+                        
+                        force_em_mag = (p1.charge * p2.charge * EM_CONSTANT) / (safe_dist**2)
+                        
+                        force_x = force_em_mag * (p2.x - p1.x) / dist
+                        force_y = force_em_mag * (p2.y - p1.y) / dist
                         p1.vx += force_x
                         p1.vy += force_y
                         p2.vx -= force_x
                         p2.vy -= force_y
+                    
+                    # Lógica de Força Nuclear Forte (para prótons e nêutrons)
+                    if p1.particle_type in ["Proton", "Neutron"] and p2.particle_type in ["Proton", "Neutron"]:
+                        NUCLEAR_DISTANCE_THRESHOLD = NUCLEAR_THRESHOLD
+                        NUCLEAR_ATTRACTION_CONSTANT = -2000 
+                        
+                        if dist < NUCLEAR_DISTANCE_THRESHOLD:
+                            force_nuclear = (NUCLEAR_ATTRACTION_CONSTANT / dist)
+                            force_x = force_nuclear * (p2.x - p1.x) / dist
+                            force_y = force_nuclear * (p2.y - p1.y) / dist
+                            p1.vx += force_x
+                            p1.vy += force_y
+                            p2.vx -= force_x
+                            p2.vy -= force_y
 
-                # Interação Gravitacional: Apenas para partículas sem carga (Neutrons, Hydrogens) e Flutuações
-                if p1.charge == 0 and p2.charge == 0 and dist > 25:
-                    force_grav = GRAVITY_CONSTANT / (dist**2)
-                    force_x = force_grav * (p2.x - p1.x) / dist
-                    force_y = force_grav * (p2.y - p1.y) / dist
-                    p1.vx += force_x
-                    p1.vy += force_y
-                    p2.vx -= force_x
-                    p2.vy -= force_y
-        
+                    # Interação Gravitacional
+                    if p1.charge == 0 and p2.charge == 0 and dist > 25:
+                        force_grav = GRAVITY_CONSTANT / (dist**2)
+                        force_x = force_grav * (p2.x - p1.x) / dist
+                        force_y = force_grav * (p2.y - p1.y) / dist
+                        p1.vx += force_x
+                        p1.vy += force_y
+                        p2.vx -= force_x
+                        p2.vy -= force_y
+            
         # Atração gravitacional entre partículas estáveis e flutuações
         if GRAVITY_CONSTANT > 0:
             for grav_source in self.stable_particles:
@@ -523,49 +597,66 @@ class QuantumCollectorGame:
                             f_other.vx += force * (grav_source.x - f_other.x) / dist
                             f_other.vy += force * (grav_source.y - f_other.y) / dist
 
-        fluctuations_to_remove = []
+        # --- Lógica de interação entre flutuações ---
+        fluctuations_to_remove_set = set()
         new_fluctuations = []
         
-        # Lógica de interação entre flutuações (mantida)
         for i in range(len(self.fluctuations)):
             for j in range(i + 1, len(self.fluctuations)):
                 f1 = self.fluctuations[i]
                 f2 = self.fluctuations[j]
+                
+                # Pula flutuações já marcadas para remoção
+                if f1 in fluctuations_to_remove_set or f2 in fluctuations_to_remove_set:
+                    continue
+                    
                 if math.hypot(f1.x - f2.x, f1.y - f2.y) < f1.size + f2.size:
                     
+                    # 1. Aniquilação de Flutuação (Matéria + Anti-Matéria)
                     if (f1.state.replace("Anti", "").lower() == f2.state.replace("Anti", "").lower() and f1.state != f2.state) and random.random() < 0.8:
                         self.stable_particles.append(StableParticle(f1.x, f1.y, (0, 255, 0), "Electron", vx=random.uniform(-1, 1), vy=random.uniform(-1, 1)))
                         self.stable_particles.append(StableParticle(f2.x, f2.y, (255, 165, 0), "Positron", vx=random.uniform(-1, 1), vy=random.uniform(-1, 1)))
                         self.matter_created += 2
-                        fluctuations_to_remove.extend([f1, f2])
+                        fluctuations_to_remove_set.add(f1)
+                        fluctuations_to_remove_set.add(f2)
+                        print("Aniquilação de Flutuação (Matéria + Anti-Matéria)")
                         for _ in range(30):
                             self.sparks.append(QuantumSpark((f1.x + f2.x)/2, (f1.y + f2.y)/2, (255, 255, 255)))
                         continue
-                    
-                    if (f1.state == "Red" and f2.state == "Antigreen") or (f1.state == "Antigreen" and f2.state == "Red"):
+                        
+                    # 2. Formação de Quark UP (Red + Antigreen)
+                    elif (f1.state == "Red" and f2.state == "Antigreen") or (f1.state == "Antigreen" and f2.state == "Red"):
                         new_vx = (f1.vx + f2.vx) / 2
                         new_vy = (f1.vy + f2.vy) / 2
                         self.stable_particles.append(StableParticle((f1.x + f2.x)/2, (f1.y + f2.y)/2, self.get_color_for_state("Red"), "Quark_UP", vx=new_vx, vy=new_vy))
                         self.matter_created += 1
-                        fluctuations_to_remove.extend([f1, f2])
+                        fluctuations_to_remove_set.add(f1)
+                        fluctuations_to_remove_set.add(f2)
                         continue
-                    
+                        
+                    # 3. Formação de Quark DOWN (Blue + Antigreen)
                     elif (f1.state == "Blue" and f2.state == "Antigreen") or (f1.state == "Antigreen" and f2.state == "Blue"):
                         new_vx = (f1.vx + f2.vx) / 2
                         new_vy = (f1.vy + f2.vy) / 2
                         self.stable_particles.append(StableParticle((f1.x + f2.x)/2, (f1.y + f2.y)/2, self.get_color_for_state("Blue"), "Quark_DOWN", vx=new_vx, vy=new_vy))
                         self.matter_created += 1
-                        fluctuations_to_remove.extend([f1, f2])
+                        fluctuations_to_remove_set.add(f1)
+                        fluctuations_to_remove_set.add(f2)
                         continue
 
+                    # 4. Formação de Quark STRANGE (Green + Antiblue)
                     elif (f1.state == "Green" and f2.state == "Antiblue") or (f1.state == "Antiblue" and f2.state == "Green"):
                         new_vx = (f1.vx + f2.vx) / 2
-                        new_vy = (f1.vy + f2.y) / 2
+                        # CORREÇÃO: f2.y trocado para f2.vy
+                        new_vy = (f1.vy + f2.vy) / 2 
                         self.stable_particles.append(StableParticle((f1.x + f2.x)/2, (f1.y + f2.y)/2, self.get_color_for_state("Green"), "Quark_STRANGE", vx=new_vx, vy=new_vy))
                         self.matter_created += 1
-                        fluctuations_to_remove.extend([f1, f2])
+                        fluctuations_to_remove_set.add(f1)
+                        fluctuations_to_remove_set.add(f2)
+                        print("Quark Strange formado!")
                         continue
 
+                    # 5. Fusão Caótica
                     diff = abs(f1.center_value - f2.center_value)
                     new_center_value = (f1.center_value + f2.center_value) / 2
                     
@@ -581,19 +672,24 @@ class QuantumCollectorGame:
 
                     new_fluctuation = Fluctuation((f1.x + f2.x) / 2, (f1.y + f2.y) / 2, new_center_value, new_color, self, chaos_level=new_chaos, vx=new_vx, vy=new_vy)
 
-                    if f1.quantum_circuit.num_qubits + f2.quantum_circuit.num_qubits <= 5: 
-                        combined_circuit = QuantumCircuit(f1.quantum_circuit.num_qubits + f2.quantum_circuit.num_qubits, f1.quantum_circuit.num_qubits + f2.quantum_circuit.num_qubits)
-                        combined_circuit = combined_circuit.compose(f1.quantum_circuit, qubits=range(f1.quantum_circuit.num_qubits))
-                        combined_circuit = combined_circuit.compose(f2.quantum_circuit, qubits=range(f1.quantum_circuit.num_qubits, f1.quantum_circuit.num_qubits + f2.quantum_circuit.num_qubits))
-                        combined_circuit.cx(0, 1)
-                        new_fluctuation.quantum_circuit = combined_circuit
+                    # CORREÇÃO DE PERFORMANCE/ERRO: Usa proxy e protege o bloco Qiskit
+                    if f1.get_complexity_proxy() + f2.get_complexity_proxy() <= 5: 
+                        if f1.quantum_circuit is not None and f2.quantum_circuit is not None:
+                            combined_circuit = QuantumCircuit(f1.quantum_circuit.num_qubits + f2.quantum_circuit.num_qubits, f1.quantum_circuit.num_qubits + f2.quantum_circuit.num_qubits)
+                            combined_circuit = combined_circuit.compose(f1.quantum_circuit, qubits=range(f1.quantum_circuit.num_qubits))
+                            combined_circuit = combined_circuit.compose(f2.quantum_circuit, qubits=range(f1.quantum_circuit.num_qubits, f1.quantum_circuit.num_qubits + f2.quantum_circuit.num_qubits))
+                            combined_circuit.cx(0, 1)
+                            new_fluctuation.quantum_circuit = combined_circuit
                     
                     new_fluctuations.append(new_fluctuation)
-                    fluctuations_to_remove.extend([f1, f2])
+                    fluctuations_to_remove_set.add(f1)
+                    fluctuations_to_remove_set.add(f2)
+                    
                     for _ in range(20):
                         self.sparks.append(QuantumSpark((f1.x + f2.x) / 2, (f1.y + f2.y) / 2, (255, 255, 255)))
         
-        for fluctuation in fluctuations_to_remove:
+        # Remoção de flutuações marcadas
+        for fluctuation in fluctuations_to_remove_set:
             if fluctuation in self.fluctuations:
                 self.fluctuations.remove(fluctuation)
 
@@ -653,15 +749,7 @@ class QuantumCollectorGame:
                             print("Átomo de Deutério foi formado pela captura de um Elétron!")
                             continue
                             
-                  # 6. Decaimento de Nêutron em Próton
-                  #  if p1.particle_type == "Neutron" and p2.particle_type == "Positron":
-                  #      if dist < p1.size + p2.size:
-                  #          particles_to_remove.extend([p1, p2])
-                  #          new_particles.append(StableParticle(p1.x, p1.y, (255, 255, 0), "Proton"))
-                  #          self.matter_stabilized += 1
-                  #          print("Nêutron colide com Pósitron, virando um Próton!")
-                  #          continue
-
+        # Aplica a remoção e adição de partículas estáveis
         for p in particles_to_remove:
             if p in self.stable_particles:
                 self.stable_particles.remove(p)
@@ -729,23 +817,83 @@ class QuantumCollectorGame:
         self.stable_particles = [p for p in self.stable_particles if p not in particles_to_remove]
         self.stable_particles.extend(new_particles)
 
+    def run_quantum_decay_check(self, decay_chance):
+        """
+        Calcula a probabilidade de decaimento usando o gerador de números aleatórios padrão (random).
+        
+        Args:
+            decay_chance (float): A probabilidade desejada de decaimento (entre 0 e 1).
+            
+        Returns:
+            bool: True se o decaimento ocorreu.
+        """
+        # Esta é a checagem padrão, sem o overhead de compilação e execução do Qiskit.
+        return random.random() < decay_chance
+
+    def run_quantum_decay_check_qiskit(self, decay_chance):
+        """
+        Calcula a probabilidade de decaimento usando um circuito quântico (Qiskit).
+        
+        Args:
+            decay_chance (float): A probabilidade desejada de decaimento (entre 0 e 1).
+            
+        Returns:
+            bool: True se o decaimento ocorreu (medida '1'), False caso contrário.
+        """
+        # Limita a probabilidade para evitar erros de domínio em arcsin (ex: chance > 1.0)
+        P1 = min(max(decay_chance, 0.0), 1.0)
+        
+        # Calcula o ângulo de rotação R_Y: theta = 2 * arcsin(sqrt(P1))
+        if P1 <= 0:
+            angle = 0
+        else:
+            angle = 2 * math.asin(math.sqrt(P1))
+        
+        qc = QuantumCircuit(1, 1)
+        # Aplica a rotação R_Y para colocar o qubit no estado |1> com probabilidade P1
+        qc.ry(angle, 0)
+        # Realiza a medição
+        qc.measure(0, 0)
+        
+        # Compila e executa no simulador (self.sim = AerSimulator())
+        compiled_circuit = transpile(qc, self.sim)
+        # Roda apenas 1 shot, pois queremos simular o resultado único para este frame
+        job = self.sim.run(compiled_circuit, shots=1)
+        result = job.result()
+        counts = result.get_counts(qc)
+        
+        # Se a medição for '1', o decaimento ocorreu
+        return '1' in counts
 
     # NOVO: Implementação completa do decaimento de quarks e nêutrons
     def check_for_quantum_decay(self):
+
+        # >>> NOVO: LÓGICA DE PULAR FRAMES PARA A CHECAGEM QUÂNTICA <<<
+        # A checagem pesada (Qiskit) só deve rodar a cada N frames.
+        QUANTUM_DECAY_FREQUENCY = 10 # Roda 10 vezes mais devagar (a cada 10 frames)
+
+        self.quantum_decay_counter += 1
+        
+        if self.quantum_decay_counter < QUANTUM_DECAY_FREQUENCY:
+            return # Sai do método sem fazer a checagem de decaimento
+            
+        # Se chegamos aqui, é hora de rodar o Qiskit
+        self.quantum_decay_counter = 0 
+        
         particles_to_remove = []
         new_particles = []
         
         # Chance por frame para decaimento (~1 minuto de meia-vida a 60 FPS)
         NEUTRON_DECAY_CHANCE = 0.0005  
         # Chance por frame para decaimento do Strange
-        STRANGE_DECAY_CHANCE = 0.001  
+        STRANGE_DECAY_CHANCE = 0.002
         # Chance por frame para decaimento do Lambda
         LAMBDA_DECAY_CHANCE = 0.005
         
         for p in self.stable_particles:
             
             # 1. Decaimento Beta do Nêutron (Neutron -> Proton + Electron)
-            if p.particle_type == "Neutron" and random.random() < NEUTRON_DECAY_CHANCE:
+            if p.particle_type == "Neutron" and self.run_quantum_decay_check(NEUTRON_DECAY_CHANCE):
                 particles_to_remove.append(p)
                 # Cria um Próton no lugar
                 new_particles.append(StableParticle(p.x, p.y, (255, 255, 0), "Proton", vx=p.vx, vy=p.vy))
@@ -756,7 +904,7 @@ class QuantumCollectorGame:
                 for _ in range(5): self.sparks.append(QuantumSpark(p.x, p.y, (100, 100, 255)))
                 
             # 2. Decaimento do Quark Estranho (Strange -> Up/Down)
-            elif p.particle_type == "Quark_STRANGE" and random.random() < STRANGE_DECAY_CHANCE:
+            elif p.particle_type == "Quark_STRANGE" and self.run_quantum_decay_check(STRANGE_DECAY_CHANCE):
                 particles_to_remove.append(p)
                 
                 # Strange decai principalmente para UP (cerca de 94% de chance)
@@ -775,7 +923,7 @@ class QuantumCollectorGame:
                 print(f"Decaimento Fraco: Quark Estranho -> {new_type.replace('Quark_', '')}")
             
             # 3. Decaimento do Bárion Lambda (Lambda -> Proton + Pion Negativo)
-            elif p.particle_type == "Lambda" and random.random() < LAMBDA_DECAY_CHANCE:
+            elif p.particle_type == "Lambda" and self.run_quantum_decay_check(LAMBDA_DECAY_CHANCE):
                 particles_to_remove.append(p)
                 
                 # Cria um Próton (carga +1, cor amarela)
@@ -805,8 +953,8 @@ font = pygame.font.SysFont("Arial", 20)
 clock = pygame.time.Clock()
 
 def draw_hud(game):
-    hud_x_offset = 200
-    y_offset = 130
+    hud_x_offset = 20
+    y_offset = 30
     
     # Título
     mission_title = font.render("LABORATÓRIO: Manipule Partículas", True, (0, 255, 255))
