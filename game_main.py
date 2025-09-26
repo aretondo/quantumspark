@@ -597,6 +597,67 @@ class QuantumCollectorGame:
                             f_other.vx += force * (grav_source.x - f_other.x) / dist
                             f_other.vy += force * (grav_source.y - f_other.y) / dist
 
+
+        particles_to_remove = []
+        new_particles = []
+        
+        self.check_for_baryon_formation()
+
+        # --- Lógica de Colisão de Partículas Estáveis (Corrigida) ---
+        for i in range(len(self.stable_particles)):
+            for j in range(i + 1, len(self.stable_particles)):
+                p1 = self.stable_particles[i]
+                p2 = self.stable_particles[j]
+                
+                dist = math.hypot(p1.x - p2.x, p1.y - p2.y)
+                if dist < p1.size + p2.size:
+                    
+                    # 1. Aniquilação de Elétron-Pósitron
+                    if (p1.particle_type == "Electron" and p2.particle_type == "Positron") or \
+                       (p1.particle_type == "Positron" and p2.particle_type == "Electron"):
+                        for _ in range(5):
+                            self.photons.append(Photon((p1.x + p2.x) / 2, (p1.y + p2.y) / 2))
+                        particles_to_remove.extend([p1, p2])
+                        print("Aniquilação! Elétron e Pósitron se transformam em Fótons.")
+                        continue
+                    
+                    # 2. Fusão de Próton e Nêutron para formar Deutério (PRIORIDADE)
+                    if (p1.particle_type == "Proton" and p2.particle_type == "Neutron") or \
+                       (p1.particle_type == "Neutron" and p2.particle_type == "Proton"):
+                        combined_velocity = math.hypot(p1.vx + p2.vx, p1.vy + p2.vy)
+                        if dist < NUCLEAR_THRESHOLD and combined_velocity > 1:
+                            particles_to_remove.extend([p1, p2])
+                            new_particles.append(StableParticle(p1.x, p1.y, (100, 100, 255), "Deuterium"))
+                            self.matter_stabilized += 1
+                            print("Fusão Nuclear! Um núcleo de Deutério foi formado!")
+                            continue
+                            
+                    # 3. Formação de Átomo de Hidrogênio
+                    if (p1.particle_type == "Proton" and p2.particle_type == "Electron") or \
+                       (p1.particle_type == "Electron" and p2.particle_type == "Proton"):
+                        if dist < NUCLEAR_THRESHOLD + 10:
+                            particles_to_remove.extend([p1, p2])
+                            new_particles.append(StableParticle(p1.x, p1.y, (255, 255, 255), "Hydrogen Atom"))
+                            self.matter_stabilized += 1
+                            print("Um átomo de Hidrogênio foi formado!")
+                            continue
+
+                    # 4. Formação de Átomo de Deutério
+                    if (p1.particle_type == "Deuterium" and p2.particle_type == "Electron") or \
+                       (p1.particle_type == "Electron" and p2.particle_type == "Deuterium"):
+                        if dist < NUCLEAR_THRESHOLD + 10:
+                            particles_to_remove.extend([p1, p2])
+                            new_particles.append(StableParticle(p1.x, p1.y, (150, 150, 255), "Deuterium Atom"))
+                            self.matter_stabilized += 1
+                            print("Átomo de Deutério foi formado pela captura de um Elétron!")
+                            continue
+                            
+        # Aplica a remoção e adição de partículas estáveis
+        for p in particles_to_remove:
+            if p in self.stable_particles:
+                self.stable_particles.remove(p)
+        self.stable_particles.extend(new_particles)
+
         # --- Lógica de interação entre flutuações ---
         fluctuations_to_remove_set = set()
         new_fluctuations = []
@@ -614,12 +675,36 @@ class QuantumCollectorGame:
                     
                     # 1. Aniquilação de Flutuação (Matéria + Anti-Matéria)
                     if (f1.state.replace("Anti", "").lower() == f2.state.replace("Anti", "").lower() and f1.state != f2.state) and random.random() < 0.8:
-                        self.stable_particles.append(StableParticle(f1.x, f1.y, (0, 255, 0), "Electron", vx=random.uniform(-1, 1), vy=random.uniform(-1, 1)))
-                        self.stable_particles.append(StableParticle(f2.x, f2.y, (255, 165, 0), "Positron", vx=random.uniform(-1, 1), vy=random.uniform(-1, 1)))
+                        
+                        # 1. GERAÇÃO DE ÂNGULO E VELOCIDADE
+                        # Gera um ângulo de ejeção aleatório (0 a 360 graus)
+                        angle = random.uniform(0, 2 * math.pi) 
+                        # Define a magnitude da velocidade (o "espirro" suave)
+                        speed_magnitude = random.uniform(1, 2) 
+                        
+                        # 2. CÁLCULO DAS VELOCIDADES
+                        # Elétron: Usa o ângulo gerado (Vx e Vy positivos/negativos dependem do seno/cosseno do ângulo)
+                        e_vx = speed_magnitude * math.cos(angle)
+                        e_vy = speed_magnitude * math.sin(angle)
+                        
+                        # Pósitron: Usa o ângulo OPOSITO (adicionamos PI = 180 graus), garantindo que seja radialmente oposto
+                        p_vx = speed_magnitude * math.cos(angle + math.pi)
+                        p_vy = speed_magnitude * math.sin(angle + math.pi)
+                        
+                        # 3. CRIAÇÃO DO ELÉTRON 
+                        self.stable_particles.append(StableParticle(f1.x, f1.y, (0, 255, 0), "Electron", 
+                                                                vx=e_vx, 
+                                                                vy=e_vy)) 
+                        
+                        # 4. CRIAÇÃO DO PÓSITRON
+                        self.stable_particles.append(StableParticle(f2.x, f2.y, (255, 165, 0), "Positron", 
+                                                                vx=p_vx, 
+                                                                vy=p_vy))
+                        
                         self.matter_created += 2
                         fluctuations_to_remove_set.add(f1)
                         fluctuations_to_remove_set.add(f2)
-                        print("Aniquilação de Flutuação (Matéria + Anti-Matéria)")
+                        print("Aniquilação de Flutuação (Matéria + Anti-Matéria) -> Matéria Sobrevivente")
                         for _ in range(30):
                             self.sparks.append(QuantumSpark((f1.x + f2.x)/2, (f1.y + f2.y)/2, (255, 255, 255)))
                         continue
@@ -695,65 +780,6 @@ class QuantumCollectorGame:
 
         self.fluctuations.extend(new_fluctuations)
 
-        particles_to_remove = []
-        new_particles = []
-        
-        self.check_for_baryon_formation()
-
-        # --- Lógica de Colisão de Partículas Estáveis (Corrigida) ---
-        for i in range(len(self.stable_particles)):
-            for j in range(i + 1, len(self.stable_particles)):
-                p1 = self.stable_particles[i]
-                p2 = self.stable_particles[j]
-                
-                dist = math.hypot(p1.x - p2.x, p1.y - p2.y)
-                if dist < p1.size + p2.size:
-                    
-                    # 1. Aniquilação de Elétron-Pósitron
-                    if (p1.particle_type == "Electron" and p2.particle_type == "Positron") or \
-                       (p1.particle_type == "Positron" and p2.particle_type == "Electron"):
-                        for _ in range(5):
-                            self.photons.append(Photon((p1.x + p2.x) / 2, (p1.y + p2.y) / 2))
-                        particles_to_remove.extend([p1, p2])
-                        print("Aniquilação! Elétron e Pósitron se transformam em Fótons.")
-                        continue
-                    
-                    # 2. Fusão de Próton e Nêutron para formar Deutério (PRIORIDADE)
-                    if (p1.particle_type == "Proton" and p2.particle_type == "Neutron") or \
-                       (p1.particle_type == "Neutron" and p2.particle_type == "Proton"):
-                        combined_velocity = math.hypot(p1.vx + p2.vx, p1.vy + p2.vy)
-                        if dist < NUCLEAR_THRESHOLD and combined_velocity > 1:
-                            particles_to_remove.extend([p1, p2])
-                            new_particles.append(StableParticle(p1.x, p1.y, (100, 100, 255), "Deuterium"))
-                            self.matter_stabilized += 1
-                            print("Fusão Nuclear! Um núcleo de Deutério foi formado!")
-                            continue
-                            
-                    # 3. Formação de Átomo de Hidrogênio
-                    if (p1.particle_type == "Proton" and p2.particle_type == "Electron") or \
-                       (p1.particle_type == "Electron" and p2.particle_type == "Proton"):
-                        if dist < NUCLEAR_THRESHOLD + 10:
-                            particles_to_remove.extend([p1, p2])
-                            new_particles.append(StableParticle(p1.x, p1.y, (255, 255, 255), "Hydrogen Atom"))
-                            self.matter_stabilized += 1
-                            print("Um átomo de Hidrogênio foi formado!")
-                            continue
-
-                    # 4. Formação de Átomo de Deutério
-                    if (p1.particle_type == "Deuterium" and p2.particle_type == "Electron") or \
-                       (p1.particle_type == "Electron" and p2.particle_type == "Deuterium"):
-                        if dist < NUCLEAR_THRESHOLD + 10:
-                            particles_to_remove.extend([p1, p2])
-                            new_particles.append(StableParticle(p1.x, p1.y, (150, 150, 255), "Deuterium Atom"))
-                            self.matter_stabilized += 1
-                            print("Átomo de Deutério foi formado pela captura de um Elétron!")
-                            continue
-                            
-        # Aplica a remoção e adição de partículas estáveis
-        for p in particles_to_remove:
-            if p in self.stable_particles:
-                self.stable_particles.remove(p)
-        self.stable_particles.extend(new_particles)
 
 # NOVO: Implementação completa da formação de bárions, incluindo Lambda
     def check_for_baryon_formation(self):
