@@ -20,7 +20,7 @@ HEIGHT = int(os.getenv("HEIGHT", 1080))
 
 # Reduza este valor se o lag persistir.
 MAX_OBJECTS = 1000
-MAX_VELOCITY = 500000.0
+PHOTON_SPEED = 50
 
 # A taxa de criação de novas flutuações, em milissegundos.
 SPAWN_MULTIPLIER = float(os.getenv("SPAWN_MULTIPLIER", 0.5))
@@ -109,11 +109,17 @@ class Photon:
     def __init__(self, x, y):
         self.x = x
         self.y = y
-        self.vx = random.uniform(-5, 5)
-        self.vy = random.uniform(-5, 5)
         self.size = 3
         self.color = (255, 255, 0) # Amarelo, representando a luz
         self.lifetime = PHOTON_LIFETIME
+
+        # --- CORREÇÃO DE VELOCIDADE ---
+        # 1. Gera um ângulo de ejeção aleatório (isótropo)
+        angle = random.uniform(0, 2 * math.pi)
+        
+        # 2. Atribui a velocidade ALTA e CONSTANTE
+        self.vx = PHOTON_SPEED * math.cos(angle)
+        self.vy = PHOTON_SPEED * math.sin(angle)
 
     def update(self):
         self.x += self.vx
@@ -443,6 +449,17 @@ class QuantumCollectorGame:
         self.force_update_counter = 0
         self.baryon_check_counter = 0 
         self.quantum_decay_counter = 0
+        self.message_log = []
+        self.max_messages = 5 # Limita o número de linhas exibidas na tela
+        self.message_duration = 300 # Tempo de vida da mensagem (em frames)
+
+    def add_message(self, text):
+        """Adiciona uma nova mensagem ao log com um contador de frames."""
+        self.message_log.append({"text": text, "timer": self.message_duration})
+        
+        # Limita o log para manter apenas as mensagens mais recentes
+        if len(self.message_log) > self.max_messages * 2: # Limite um pouco maior para evitar picos
+            self.message_log = self.message_log[-self.max_messages:]
         
     def get_color_for_state(self, state):
         if state == "Red": return (255, 0, 0)
@@ -535,6 +552,17 @@ class QuantumCollectorGame:
         self.fluctuations.append(anti_fluctuation)
     
     def check_interactions(self, mouse_pressed):
+
+        new_log = []
+        for msg in self.message_log:
+            # Diminui o timer (countdown)
+            msg['timer'] -= 1
+            
+            # Mantém apenas as mensagens que ainda têm tempo de vida
+            if msg['timer'] > 0:
+                new_log.append(msg)
+
+        self.message_log = new_log
         
         # Lógica de Interação com o Mouse (Sem Alterações)
         if mouse_pressed and self.mouse_pos:
@@ -649,6 +677,7 @@ class QuantumCollectorGame:
                             self.photons.append(Photon((p1.x + p2.x) / 2, (p1.y + p2.y) / 2))
                         particles_to_remove.extend([p1, p2])
                         print("Aniquilação! Elétron e Pósitron se transformam em Fótons.")
+                        self.add_message("Aniquilação! Elétron e Pósitron se transformam em Fótons.")
                         continue
                     
                     # 2. Fusão de Próton e Nêutron para formar Deutério (PRIORIDADE)
@@ -660,6 +689,7 @@ class QuantumCollectorGame:
                             new_particles.append(StableParticle(p1.x, p1.y, (100, 100, 255), "Deuterium"))
                             self.matter_stabilized += 1
                             print("Fusão Nuclear! Um núcleo de Deutério foi formado!")
+                            self.add_message("Fusão Nuclear! Um núcleo de Deutério foi formado!")
                             continue
                             
                     # 3. Formação de Átomo de Hidrogênio
@@ -670,6 +700,7 @@ class QuantumCollectorGame:
                             new_particles.append(StableParticle(p1.x, p1.y, (255, 255, 255), "Hydrogen Atom"))
                             self.matter_stabilized += 1
                             print("Um átomo de Hidrogênio foi formado!")
+                            self.add_message("Um átomo de Hidrogênio foi formado!")
                             continue
 
                     # 4. Formação de Átomo de Deutério
@@ -680,6 +711,7 @@ class QuantumCollectorGame:
                             new_particles.append(StableParticle(p1.x, p1.y, (150, 150, 255), "Deuterium Atom"))
                             self.matter_stabilized += 1
                             print("Átomo de Deutério foi formado pela captura de um Elétron!")
+                            self.add_message("Átomo de Deutério foi formado pela captura de um Elétron!")
                             continue
                             
         # Aplica a remoção e adição de partículas estáveis
@@ -735,6 +767,7 @@ class QuantumCollectorGame:
                         fluctuations_to_remove_set.add(f1)
                         fluctuations_to_remove_set.add(f2)
                         print("Aniquilação de Flutuação (Matéria + Anti-Matéria) -> Matéria Sobrevivente")
+                        self.add_message("Aniquilação de Flutuação (Matéria + Anti-Matéria) -> Matéria Sobrevivente")
                         for _ in range(30):
                             self.sparks.append(QuantumSpark((f1.x + f2.x)/2, (f1.y + f2.y)/2, (255, 255, 255)))
                         continue
@@ -768,7 +801,7 @@ class QuantumCollectorGame:
                         self.matter_created += 1
                         fluctuations_to_remove_set.add(f1)
                         fluctuations_to_remove_set.add(f2)
-                        print("Quark Strange formado!")
+                        #print("Quark Strange formado!")
                         continue
 
                     # 5. Fusão Caótica
@@ -848,6 +881,7 @@ class QuantumCollectorGame:
                             new_particles.append(StableParticle(center_x, center_y, (180, 0, 180), "Lambda", vx=avg_vx, vy=avg_vy))
                             self.matter_stabilized += 1
                             print("Bárion Lambda (Up, Down, Strange) formado!")
+                            self.add_message("Bárion Lambda (Up, Down, Strange) formado!")
                             
                         # --- Proton (Up + Up + Down) ---
                         elif types == ['Quark_DOWN', 'Quark_UP', 'Quark_UP']: 
@@ -858,6 +892,7 @@ class QuantumCollectorGame:
                             new_particles.append(StableParticle(center_x, center_y, (255, 255, 0), "Proton", vx=avg_vx, vy=avg_vy))
                             self.matter_stabilized += 1
                             print("Próton (Up, Up, Down) formado!")
+                            self.add_message("Próton (Up, Up, Down) formado!")
                             
                         # --- Neutron (Up + Down + Down) ---
                         elif types == ['Quark_DOWN', 'Quark_DOWN', 'Quark_UP']:
@@ -868,6 +903,7 @@ class QuantumCollectorGame:
                             new_particles.append(StableParticle(center_x, center_y, (150, 150, 150), "Neutron", vx=avg_vx, vy=avg_vy))
                             self.matter_stabilized += 1
                             print("Nêutron (Up, Down, Down) formado!")
+                            self.add_message("Nêutron (Up, Down, Down) formado!")
                             
         # Aplica as remoções e adições
         self.stable_particles = [p for p in self.stable_particles if p not in particles_to_remove]
@@ -960,6 +996,7 @@ class QuantumCollectorGame:
                 # Cria um Elétron (Beta)
                 new_particles.append(StableParticle(p.x + 5, p.y + 5, (0, 255, 0), "Electron", vx=random.uniform(-1, 1), vy=random.uniform(-1, 1)))
                 print("Decaimento Beta: Nêutron -> Próton + Elétron (e Antineutrino, simplificado)")
+                self.add_message("Decaimento Beta: Nêutron -> Próton + Elétron (e Antineutrino, simplificado)")
                 # Faísca para representar a energia liberada
                 for _ in range(5): self.sparks.append(QuantumSpark(p.x, p.y, (100, 100, 255)))
                 
@@ -981,6 +1018,7 @@ class QuantumCollectorGame:
                 # Energia liberada (W boson, leptons, etc.) simplificada para um fóton
                 self.photons.append(Photon(p.x, p.y))
                 print(f"Decaimento Fraco: Quark Estranho -> {new_type.replace('Quark_', '')}")
+                self.add_message(f"Decaimento Fraco: Quark Estranho -> {new_type.replace('Quark_', '')}")
             
             # 3. Decaimento do Bárion Lambda (Lambda -> Proton + Pion Negativo)
             elif p.particle_type == "Lambda" and self.run_quantum_decay_check(LAMBDA_DECAY_CHANCE):
@@ -993,6 +1031,7 @@ class QuantumCollectorGame:
                 new_particles.append(StableParticle(p.x + 5, p.y + 5, (255, 100, 100), "Pion_MINUS", vx=random.uniform(-1, 1), vy=random.uniform(-1, 1)))
 
                 print("Decaimento Fraco: Bárion Lambda -> Próton + Píon Negativo")
+                self.add_message("Decaimento Fraco: Bárion Lambda -> Próton + Píon Negativo")
                 # Faísca para representar a energia liberada
                 for _ in range(10): self.sparks.append(QuantumSpark(p.x, p.y, (180, 0, 180)))
 
@@ -1006,6 +1045,7 @@ class QuantumCollectorGame:
                 self.photons.append(Photon(p.x, p.y)) 
                 
                 print("Decaimento Fraco: Píon Negativo -> Múon Negativo (+ Antineutrino, simplificado)")
+                self.add_message("Decaimento Fraco: Píon Negativo -> Múon Negativo (+ Antineutrino, simplificado)")
 
             # 5 Decaimento do Muon Negativo (Muon -> Eletron + Antineutrino)  
             elif p.particle_type == "Muon_MINUS" and self.run_quantum_decay_check(MUON_DECAY_CHANCE):
@@ -1023,7 +1063,7 @@ class QuantumCollectorGame:
                 for _ in range(3): self.sparks.append(QuantumSpark(p.x, p.y, (0, 0, 255)))
                 
                 print("Decaimento Fraco Final: Múon Negativo -> Elétron (+ 2 Neutrinos, simplificado)")
-                
+                self.add_message("Decaimento Fraco Final: Múon Negativo -> Elétron (+ 2 Neutrinos, simplificado)")
                 
         # Aplica as alterações
         self.stable_particles = [p for p in self.stable_particles if p not in particles_to_remove]
@@ -1072,6 +1112,19 @@ def draw_hud(game):
     
     y_offset += 15
 
+    # Assume que a lista de fótons é game.photons
+    photon_count = len(game.photons) 
+    
+    photon_title = font.render("Partículas de Campo", True, (0, 255, 255))
+    screen.blit(photon_title, (hud_x_offset, y_offset))
+    y_offset += 30
+    
+    photon_text = font.render(f"  Fótons: {photon_count}", True, (255, 255, 0)) # Fótons em amarelo para destaque
+    screen.blit(photon_text, (hud_x_offset, y_offset))
+    y_offset += 25
+    
+    y_offset += 15
+
     # Quarks
     quark_title = font.render("Quarks", True, (0, 255, 255))
     screen.blit(quark_title, (hud_x_offset, y_offset))
@@ -1084,13 +1137,15 @@ def draw_hud(game):
         y_offset += 25
 
     # Mesons
-    quark_title = font.render("Meson", True, (0, 255, 255))
-    screen.blit(quark_title, (hud_x_offset, y_offset))
+    meson_title = font.render("Mésons e Léptons Instáveis", True, (0, 255, 255)) # Renomeei o título para ser mais preciso
+    screen.blit(meson_title, (hud_x_offset, y_offset))
     y_offset += 30
     quark_types = ["Pion_MINUS","Muon_MINUS"]
     for q_type in quark_types:
         count = counts.get(q_type, 0)
-        text = font.render(f"  {q_type.replace('Meson_', '')}: {count}", True, (150, 150, 150))
+        # Substituí 'Meson_' por um prefixo vazio ou 'Pion'/'Muon' para simplificar a exibição:
+        display_name = q_type.replace('Pion_MINUS', 'Píon-').replace('Muon_MINUS', 'Múon-') 
+        text = font.render(f"  {display_name}: {count}", True, (150, 150, 150))
         screen.blit(text, (hud_x_offset, y_offset))
         y_offset += 25
 
@@ -1115,10 +1170,36 @@ def draw_hud(game):
     ratio_text = font.render(f"Taxa de Estabilização: {ratio:.2f}%", True, (0, 255, 0) if ratio > 0 else (200, 200, 200))
     screen.blit(ratio_text, (hud_x_offset, y_offset))
 
-    # Dica
-    tip_text = font.render("DICA: Arraste 3 quarks de cores diferentes para que eles colidam e formem um Nêutron!", True, (255, 255, 0))
-    text_rect = tip_text.get_rect(center=(WIDTH // 2, HEIGHT - 30))
-    screen.blit(tip_text, text_rect)
+    # --- NOVO: Área de Log Dinâmico (Substituindo a DICA) ---
+    
+    log_line_height = 20
+    max_log_lines = 3
+    
+    # Pega as últimas 'max_log_lines' mensagens (as mais recentes)
+    messages_to_draw = game.message_log[-max_log_lines:] 
+    
+    # Desenha as mensagens de baixo para cima
+    for i, msg in enumerate(reversed(messages_to_draw)):
+        
+        # 1. Calcula o fade-out (alpha)
+        # O timer é definido na adição da mensagem; 60 frames = 1 segundo de fade
+        # Assumindo que o game.message_duration seja 300 (5 segundos)
+        alpha = min(255, int(255 * (msg['timer'] / 60)))
+        
+        # 2. Renderiza o texto
+        text_surface = font.render(msg['text'], True, (255, 255, 255))
+        text_surface.set_alpha(alpha)
+        
+        # 3. Calcula a posição centralizada na parte inferior da tela
+        # As mensagens mais novas (i=0) ficam mais acima.
+        y_pos = HEIGHT - 30 - (i * log_line_height) 
+        text_rect = text_surface.get_rect(center=(WIDTH // 2, y_pos))
+        
+        # 4. Desenha na tela
+        screen.blit(text_surface, text_rect)
+    
+    # --------------------------------------------------------
+
 
 def main():
     game = QuantumCollectorGame()
@@ -1186,7 +1267,7 @@ def main():
         draw_hud(game)
 
         pygame.display.flip()
-        clock.tick(60)
+        clock.tick(30)
 
     pygame.quit()
 
