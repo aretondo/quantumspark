@@ -684,7 +684,7 @@ class QuantumCollectorGame:
                     if (p1.particle_type == "Proton" and p2.particle_type == "Neutron") or \
                        (p1.particle_type == "Neutron" and p2.particle_type == "Proton"):
                         combined_velocity = math.hypot(p1.vx + p2.vx, p1.vy + p2.vy)
-                        if dist < NUCLEAR_THRESHOLD and combined_velocity > 1:
+                        if dist < NUCLEAR_THRESHOLD and combined_velocity > 0.5:
                             particles_to_remove.extend([p1, p2])
                             new_particles.append(StableParticle(p1.x, p1.y, (100, 100, 255), "Deuterium"))
                             self.matter_stabilized += 1
