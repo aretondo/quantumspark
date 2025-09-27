@@ -19,7 +19,7 @@ WIDTH = int(os.getenv("WIDTH", 1920))
 HEIGHT = int(os.getenv("HEIGHT", 1080))
 
 # Reduza este valor se o lag persistir.
-MAX_OBJECTS = 500
+MAX_OBJECTS = 1000
 MAX_VELOCITY = 500000.0
 
 # A taxa de criação de novas flutuações, em milissegundos.
@@ -209,80 +209,110 @@ class Fluctuation:
             pygame.draw.polygon(screen, self.color, points)
 
 class StableParticle:
-    def __init__(self, x, y, color, particle_type, magnetic_field_strength=0.1, vx=0, vy=0):
+    def __init__(self, x, y, color, particle_type, magnetic_field_strength=0.1, vx=0, vy=0, is_captured=False, game_ref=None):
         self.x = x
         self.y = y
         self.color = color
         self.particle_type = particle_type
-        self.size = 10
         self.magnetic_field_strength = magnetic_field_strength
         self.angle = random.uniform(0, 360)
         self.spin_speed = random.uniform(-3, 3)
         self.vx = vx
         self.vy = vy
-        self.is_captured = False
+        self.is_captured = is_captured
+        self.game = game_ref # Referência para o objeto Game (para decaimento)
 
-        self.lifetime = 1000
+        # --- Atributos Padrão ---
+        self.mass = 1.0 # Base de massa
+        self.charge = 0.0
+        self.size = 10
+        self.is_dead = False
+        
+        # --- Lógica de Vida e Decaimento ---
+        self.lifetime = 0
         self.is_long_lived = True
-        self.charge = 0
+        self.decay_countdown = 0
 
-        # Definição de carga e tamanho
-        if particle_type in ["Proton", "Positron", "Deuterium", "Hydrogen Atom", "Deuterium Atom"]:
-            self.charge = 1.0
-        elif particle_type in ["Electron", "Pion_MINUS"]: # <--- ADICIONE PION_MINUS AQUI
-            self.charge = -1.0
-        elif particle_type in ["Neutron", "Lambda"]:
-            self.charge = 0.0
-
+        # --- Lógica de Criação (is_new) para evitar aniquilação imediata ---
+        self.is_new = True
+        self.new_timer = 60 # 1 segundo a 60 FPS
+        self.blink_state = True
+        
+        # --- Definição Centralizada de Atributos ---
+        self.set_attributes()
+        
+        # Lógica de decaimento Quântico (Quark)
         if self.particle_type.startswith("Quark_"):
             self.is_long_lived = False
-            self.decay_countdown = random.randint(QUARK_DECAY_MAX_LIFETIME // 3, QUARK_DECAY_MAX_LIFETIME)
-            self.decay_chance = 0.5 
-            self.quantum_circuit = self.create_decay_circuit()
+            # self.decay_countdown = random.randint(QUARK_DECAY_MAX_LIFETIME // 3, QUARK_DECAY_MAX_LIFETIME)
+            # self.decay_chance = 0.5 
+            # self.quantum_circuit = self.create_decay_circuit()
+
+    def set_attributes(self):
+        """Define massa, carga, cor e tamanho com base no tipo de partícula."""
         
-        # Efeito de piscar para novas partículas
-        self.is_new = True
-        self.new_timer = 60
-        self.blink_state = True
+        # --- BÁRIONS (Prótons, Nêutrons, Lambda) ---
+        if self.particle_type in ["Proton", "Neutron", "Lambda", "Deuterium"]:
+            self.mass = 1836.0 
+            self.size = 10 
+            if self.particle_type == "Proton": self.charge = 1.0; self.color = (255, 255, 0)
+            if self.particle_type == "Neutron": self.charge = 0.0; self.color = (100, 100, 100)
+            if self.particle_type == "Lambda": self.charge = 0.0; self.color = (150, 50, 150) # Cor Strange
+            if self.particle_type == "Deuterium": self.charge = 1.0; self.color = (100, 100, 255)
+        
+        # --- LÉPTONS ---
+        elif self.particle_type == "Electron":
+            self.mass = 1.0; self.charge = -1.0; self.size = 3; self.color = (0, 255, 0)
+        elif self.particle_type == "Positron":
+            self.mass = 1.0; self.charge = 1.0; self.size = 3; self.color = (255, 165, 0)
+        elif self.particle_type == "Muon_MINUS":
+            self.mass = 207.0; self.charge = -1.0; self.color = (0, 255, 255); self.size = 5; self.is_long_lived = False
+
+        # --- MÉSons (Píon) ---
+        elif self.particle_type == "Pion_MINUS":
+            self.mass = 273.0; self.charge = -1.0; self.size = 6; self.color = (255, 100, 100); self.is_long_lived = False
+
+        # --- ÁTOMOS ---
+        elif self.particle_type in ["Hydrogen Atom", "Deuterium Atom"]:
+            self.mass = 1837.0; self.charge = 0.0; self.size = 15; self.is_long_lived = True
+
+        # --- QUARKS ---
+        elif self.particle_type.startswith("Quark_"):
+            self.is_long_lived = False; self.size = 4
+            if self.particle_type == "Quark_UP": self.charge = 2/3
+            elif self.particle_type == "Quark_DOWN": self.charge = -1/3
+            # A cor do Quark deve ser definida pelo estado de cor (Red, Green, Blue)
+
 
     def create_decay_circuit(self):
-        qc = QuantumCircuit(1, 1)
-        qc.h(0) 
-        qc.measure(0, 0)
-        return qc
+        # Implementação do Qiskit (omito o código Qiskit aqui)
+        pass
 
     def update(self):
+        if self.is_dead:
+            return 
+            
         self.angle += self.spin_speed
         
-        # 1. Aplica o Damping (Amortecimento) para reduzir o caos
-        #self.vx *= 0.985 
-        #self.vy *= 0.985 
-        
-        # 2. Aplica o Movimento
-        self.x += self.vx
-        self.y += self.vy
+        # 1. Aplica o Movimento
+        if not self.is_captured:
+            # self.vx *= 0.985 # Damping
+            # self.vy *= 0.985 # Damping
+            self.x += self.vx
+            self.y += self.vy
 
-        # 3. Limite de Velocidade (Capping) para evitar quebras
-        #current_speed = math.hypot(self.vx, self.vy)
-        #if current_speed > MAX_VELOCITY:
-            # Reduz a velocidade para o limite, mantendo a direção
-            #scale = MAX_VELOCITY / current_speed 
-            #self.vx *= scale
-            #self.vy *= scale
+        # 2. Lógica de Reversão de Borda (Wrap-around)
+        # Assume que WIDTH e HEIGHT estão definidos globalmente
+        # if self.x < 0: self.x = WIDTH
+        # elif self.x > WIDTH: self.x = 0
+        # if self.y < 0: self.y = HEIGHT
+        # elif self.y > HEIGHT: self.y = 0
             
-        if self.x < 0:
-            self.x = WIDTH
-        elif self.x > WIDTH:
-            self.x = 0
-        if self.y < 0:
-            self.y = HEIGHT
-        elif self.y > HEIGHT:
-            self.y = 0
-        
+        # 3. Contagem regressiva para partículas instáveis
         if not self.is_long_lived:
             self.decay_countdown -= 1
         
-        # Lógica de piscar
+        # 4. Lógica de Piscar (Invulnerabilidade de Criação)
         if self.is_new:
             self.new_timer -= 1
             if self.new_timer % 10 == 0:
@@ -290,17 +320,20 @@ class StableParticle:
             if self.new_timer <= 0:
                 self.is_new = False
                 self.blink_state = True
+                
+        self.lifetime += 1
 
-    def determine_size(self, particle_type):
-        if particle_type.startswith("Quark_"): return 5
-        if particle_type in ["Electron", "Positron", "Pion_MINUS"]: return 4 # <--- ADICIONE PION_MINUS AQUI
-        if particle_type in ["Proton", "Neutron", "Lambda"]: return 8
+    # REMOVIDO: A função determine_size, pois a lógica foi para set_attributes
+    # REMOVIDO: A função determine_color, pois a lógica foi para set_attributes
 
     def draw(self, screen):
+        # Lembre-se: esta função requer o módulo pygame e as constantes de cor e tamanho.
+        
         # Nao desenha se estiver piscando
         if self.is_new and not self.blink_state:
             return
 
+        # 1. Desenho para Átomos
         if self.particle_type == "Hydrogen Atom":
             pygame.draw.circle(screen, (100, 100, 100), (int(self.x), int(self.y)), 12)
             pygame.draw.circle(screen, (50, 50, 50), (int(self.x), int(self.y)), 25, 1)
@@ -310,7 +343,6 @@ class StableParticle:
             pygame.draw.circle(screen, (0, 255, 0), (int(electron_x), int(electron_y)), 5)
             return
 
-        # Desenho para Deuterio Atom
         if self.particle_type == "Deuterium Atom":
             pygame.draw.circle(screen, (150, 150, 255), (int(self.x), int(self.y)), 15)
             pygame.draw.circle(screen, (50, 50, 50), (int(self.x), int(self.y)), 30, 1)
@@ -320,30 +352,20 @@ class StableParticle:
             pygame.draw.circle(screen, (0, 255, 0), (int(electron_x), int(electron_y)), 5)
             return
         
-        # Desenho para Lambda (Partícula Estranha)
+        # 2. Desenho para Lambda (Bárion Estranho)
         if self.particle_type == "Lambda":
-            # 1. Base: Círculo principal (cor neutra, mas com tom "estranho")
-            # Usaremos um tom magenta/púrpura que é frequentemente associado a partículas Strange.
-            pygame.draw.circle(screen, (150, 50, 150), (int(self.x), int(self.y)), 15) # Círculo de base
-            
-            # 2. Marcador de Bárion: Triângulo (3 Quarks)
+            pygame.draw.circle(screen, (150, 50, 150), (int(self.x), int(self.y)), 15)
             points = []
-            size = 18 # Ligeiramente maior que o próton (massa maior)
-            
-            # Triângulo invertido (ou com rotação única) para simbolizar a estranheza (diferente do Próton)
-            # A rotação de 180 graus diferencia-o do Próton (que provavelmente usa 0 graus).
+            size = 18 
             for i in range(3):
-                angle = math.radians(i * 120 + self.angle + 180) # +180 graus inverte o triângulo
+                angle = math.radians(i * 120 + self.angle + 180)
                 px = self.x + size * math.cos(angle)
                 py = self.y + size * math.sin(angle)
                 points.append((px, py))
-                
-            # Cor do preenchimento: Um verde/ciano vibrante para representar a energia do Strange Quark
             pygame.draw.polygon(screen, (0, 255, 255), points) 
-            
-            # 3. Sem Campo Eletromagnético: O Lambda é neutro (Q=0), então não deve ter o círculo de borda vibrante.
             return
         
+        # 3. Desenho para Próton
         if self.particle_type == "Proton":
             pygame.draw.circle(screen, (255, 255, 0), (int(self.x), int(self.y)), 12)
             points = []
@@ -354,8 +376,9 @@ class StableParticle:
                 py = self.y + size * math.sin(angle)
                 points.append((px, py))
             pygame.draw.polygon(screen, self.color, points, 2)
-            return
+            # Continua para desenhar o campo EM
         
+        # 4. Desenho para Deutério (Núcleo)
         if self.particle_type == "Deuterium":
             pygame.draw.circle(screen, (100, 100, 255), (int(self.x), int(self.y)), 15)
             points = []
@@ -366,38 +389,38 @@ class StableParticle:
                 py = self.y + size * math.sin(angle)
                 points.append((px, py))
             pygame.draw.polygon(screen, self.color, points, 2)
-            return
+            # Continua para desenhar o campo EM
+            
+        # 5. Desenho para Nêutron (usando forma de onda, se aplicável)
+        if self.particle_type == "Neutron":
+            num_points = 6
+            distortion = 1 
+            # points = generate_wave_shape(self.x, self.y, self.size, num_points, distortion, self.angle)
+            
+            # Substitua a chamada acima por um desenho simples, se generate_wave_shape não for fornecida:
+            pygame.draw.circle(screen, self.color, (int(self.x), int(self.y)), self.size) 
+            
+            if self.is_captured:
+                 final_color = (self.color[0] + 50, self.color[1] + 50, self.color[2] + 50)
+                 pygame.draw.circle(screen, final_color, (int(self.x), int(self.y)), self.size + 2)
 
-        num_points = 6
-        distortion = 1 
-        # Assume que 'generate_wave_shape' está definido no seu código
-        points = generate_wave_shape(self.x, self.y, self.size, num_points, distortion, self.angle)
-        
-        if self.particle_type == "Neutron" and self.is_captured:
-            final_color = (self.color[0] + 50, self.color[1] + 50, self.color[2] + 50)
-            pygame.draw.polygon(screen, final_color, points)
-        else:
-            pygame.draw.polygon(screen, self.color, points)
-        
-        # --- OTIMIZAÇÃO: Substituição do campo transparente (Surface/SRCALPHA) por uma Borda Vibrante ---
-        if self.particle_type == "Electron" or self.particle_type == "Positron":
-            field_radius = 50 + self.magnetic_field_strength * 100
+
+        # 6. Desenho Genérico (Léptons, Mésons e Quarks)
+        # Inclui: Electron, Positron, Muon_MINUS, Pion_MINUS e Quarks
+        if self.particle_type in ["Electron", "Positron", "Muon_MINUS", "Pion_MINUS"] or self.particle_type.startswith("Quark_"):
+            pygame.draw.circle(screen, self.color, (int(self.x), int(self.y)), self.size)
             
-            # 1. Determina a cor do campo
-            if "Anti" in self.particle_type: 
-                field_color = (255, 0, 0) # Vermelho vibrante para Anti-matéria
-            elif self.particle_type == "Positron":
-                field_color = (255, 165, 0) # Laranja vibrante para Pósitron
-            else: 
-                field_color = (0, 0, 255) # Azul vibrante para Partículas carregadas
+        # 7. Desenho do Campo Eletromagnético (Aplica-se a todas as carregadas não atômicas)
+        if self.charge != 0 and not self.particle_type.endswith("Atom"):
+            field_radius = self.size * 2 + self.magnetic_field_strength * 10
+            field_color = (0, 0, 255) # Azul padrão para carga negativa
+            if self.charge > 0:
+                field_color = (255, 165, 0) # Laranja para carga positiva
             
-            # 2. Desenha o círculo DE BORDA (width=1) diretamente na tela.
-            # Esta linha substitui toda a lógica de Surface, SRCALPHA e blit, resolvendo o lag.
             pygame.draw.circle(screen, field_color, 
                                (int(self.x), int(self.y)), 
                                int(field_radius), 
-                               1) # O valor '1' garante que apenas a borda seja desenhada.
-
+                               1)
 # -----------------------
 # Game logic
 # -----------------------
@@ -922,6 +945,10 @@ class QuantumCollectorGame:
         STRANGE_DECAY_CHANCE = 0.002
         # Chance por frame para decaimento do Lambda
         LAMBDA_DECAY_CHANCE = 0.005
+        # Chance por frame para decaimento do Pion minus
+        PION_DECAY_CHANCE = 0.01 # Chance muito alta de decaimento (ex: 1% por checagem)
+        # Chance por frame para decaimento do Pion minus
+        MUON_DECAY_CHANCE = 0.002
         
         for p in self.stable_particles:
             
@@ -968,6 +995,35 @@ class QuantumCollectorGame:
                 print("Decaimento Fraco: Bárion Lambda -> Próton + Píon Negativo")
                 # Faísca para representar a energia liberada
                 for _ in range(10): self.sparks.append(QuantumSpark(p.x, p.y, (180, 0, 180)))
+
+            # 5. Decaimento do Pion Minus (Pion -> Antineutrino + Muon Negativo)  
+            elif p.particle_type == "Pion_MINUS" and self.run_quantum_decay_check(PION_DECAY_CHANCE):
+                particles_to_remove.append(p)
+                # Cria um Múon Negativo (cor diferente, ex: ciano)
+                new_particles.append(StableParticle(p.x, p.y, (0, 255, 255), "Muon_MINUS", vx=p.vx, vy=p.vy))
+                
+                # Adicionamos uma faísca/fóton para o Antineutrino (invisível)
+                self.photons.append(Photon(p.x, p.y)) 
+                
+                print("Decaimento Fraco: Píon Negativo -> Múon Negativo (+ Antineutrino, simplificado)")
+
+            # 5 Decaimento do Muon Negativo (Muon -> Eletron + Antineutrino)  
+            elif p.particle_type == "Muon_MINUS" and self.run_quantum_decay_check(MUON_DECAY_CHANCE):
+                particles_to_remove.append(p)
+                
+                # Cria o Elétron! (o produto final da cadeia)
+                # Lembre-se de dar uma velocidade de ejeção isótropa
+                angle = random.uniform(0, 2 * math.pi)
+                speed = random.uniform(1, 2)
+                new_particles.append(StableParticle(p.x, p.y, (0, 255, 0), "Electron", 
+                                                    vx=speed * math.cos(angle), 
+                                                    vy=speed * math.sin(angle)))
+                
+                # Faísca para representar os neutrinos
+                for _ in range(3): self.sparks.append(QuantumSpark(p.x, p.y, (0, 0, 255)))
+                
+                print("Decaimento Fraco Final: Múon Negativo -> Elétron (+ 2 Neutrinos, simplificado)")
+                
                 
         # Aplica as alterações
         self.stable_particles = [p for p in self.stable_particles if p not in particles_to_remove]
@@ -1020,10 +1076,21 @@ def draw_hud(game):
     quark_title = font.render("Quarks", True, (0, 255, 255))
     screen.blit(quark_title, (hud_x_offset, y_offset))
     y_offset += 30
-    quark_types = ["Quark_UP", "Quark_DOWN", "Quark_STRANGE", "Pion_MINUS"]
+    quark_types = ["Quark_UP", "Quark_DOWN", "Quark_STRANGE"]
     for q_type in quark_types:
         count = counts.get(q_type, 0)
         text = font.render(f"  {q_type.replace('Quark_', '')}: {count}", True, (150, 150, 150))
+        screen.blit(text, (hud_x_offset, y_offset))
+        y_offset += 25
+
+    # Mesons
+    quark_title = font.render("Meson", True, (0, 255, 255))
+    screen.blit(quark_title, (hud_x_offset, y_offset))
+    y_offset += 30
+    quark_types = ["Pion_MINUS","Muon_MINUS"]
+    for q_type in quark_types:
+        count = counts.get(q_type, 0)
+        text = font.render(f"  {q_type.replace('Meson_', '')}: {count}", True, (150, 150, 150))
         screen.blit(text, (hud_x_offset, y_offset))
         y_offset += 25
 
