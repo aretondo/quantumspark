@@ -234,7 +234,7 @@ class StableParticle:
         self.decay_countdown = 0
 
         # --- Lógica de Criação (is_new) para evitar aniquilação imediata ---
-        self.is_new = True
+        self.is_new = False
         self.new_timer = 60 # 1 segundo a 60 FPS
         self.blink_state = True
         
