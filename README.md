@@ -1,6 +1,7 @@
 # Quantum Spark: Uma Jornada pelo Caos Quântico
 
-![Gameplay do Quantum Spark](https://raw.githubusercontent.com/aretondo/quantumspark/main/docs/screenshot.jpg)
+![Gameplay do Quantum Spark](https://raw.githubusercontent.com/aretondo/quantumspark/main/docs/example1.jpg)
+(https://raw.githubusercontent.com/aretondo/quantumspark/main/docs/example2.jpg)
 
 ## Resumo do Projeto
 
