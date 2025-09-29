@@ -160,8 +160,8 @@ class Fluctuation:
         self.num_points = 12
         self.distortion_factor = 5
 
-        #self.quantum_circuit = self.create_quantum_circuit(self.state)
-        self.quantum_circuit = None
+        self.quantum_circuit = self.create_quantum_circuit(self.state)
+        #self.quantum_circuit = None
         self.creation_time = pygame.time.get_ticks()
    
     def get_complexity_proxy(self):
@@ -250,9 +250,6 @@ class StableParticle:
         # Lógica de decaimento Quântico (Quark)
         if self.particle_type.startswith("Quark_"):
             self.is_long_lived = False
-            # self.decay_countdown = random.randint(QUARK_DECAY_MAX_LIFETIME // 3, QUARK_DECAY_MAX_LIFETIME)
-            # self.decay_chance = 0.5 
-            # self.quantum_circuit = self.create_decay_circuit()
 
     def set_attributes(self):
         """Define massa, carga, cor e tamanho com base no tipo de partícula."""
@@ -309,10 +306,10 @@ class StableParticle:
 
         # 2. Lógica de Reversão de Borda (Wrap-around)
         # Assume que WIDTH e HEIGHT estão definidos globalmente
-        # if self.x < 0: self.x = WIDTH
-        # elif self.x > WIDTH: self.x = 0
-        # if self.y < 0: self.y = HEIGHT
-        # elif self.y > HEIGHT: self.y = 0
+        if self.x < 0: self.x = WIDTH
+        elif self.x > WIDTH: self.x = 0
+        if self.y < 0: self.y = HEIGHT
+        elif self.y > HEIGHT: self.y = 0
             
         # 3. Contagem regressiva para partículas instáveis
         if not self.is_long_lived:
